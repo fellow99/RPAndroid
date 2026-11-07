@@ -22,6 +22,9 @@ class AppScreenController(private val context: Context) : ScreenController {
 
     @Volatile var vdSession: VdSession? = null
 
+    /** 界面读取器（由 app 注入无障碍服务实现）。 */
+    @Volatile var uiReader: (() -> String?)? = null
+
     override fun listApps(): List<AppInfo> {
         val intent = android.content.Intent(IntentAction.ACTION_MAIN).apply { addCategory(IntentCat.CATEGORY_LAUNCHER) }
         val resolved = pm.queryIntentActivities(intent, 0)
@@ -67,6 +70,8 @@ class AppScreenController(private val context: Context) : ScreenController {
         val s = vdSession ?: return false
         return try { s.swipe(x1, y1, x2, y2, durMs) } catch (e: Exception) { false }
     }
+
+    override fun readUi(): String? = runCatching { uiReader?.invoke() }.getOrNull()
 
     /** 会话通道目录（供嵌入的助手高效使用）。 */
     fun channel(): File = channelDir

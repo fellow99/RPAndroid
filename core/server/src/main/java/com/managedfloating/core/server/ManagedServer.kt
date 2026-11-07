@@ -39,7 +39,8 @@ class ManagedServer(
 
     private val mapper = jacksonObjectMapper()
     private val mcp = McpServer(controller, taskApi)
-    private val sessions = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    private val sessions = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.channels.Channel<String>>()
+    private val streamClients = java.util.concurrent.atomic.AtomicInteger(0)
 
     fun start() {
         if (running != null) return
@@ -50,6 +51,7 @@ class ManagedServer(
                     val path = call.request.local.uri
                     if (authToken.isNotEmpty() && path != "/health" && !path.startsWith("/debug/")) {
                         val got = call.request.headers[ServerConfig.HEADER]
+                            ?: call.request.queryParameters["token"]
                         if (got != authToken) {
                             call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "unauthorized"))
                         }
@@ -70,6 +72,12 @@ class ManagedServer(
                         controller.launch(body.pkg, body.component)
                     }
                     call.respond(result)
+                }
+
+                get("/ui") {
+                    val ui = withContext(Dispatchers.IO) { controller.readUi() }
+                    if (ui == null) call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "ui unavailable (enable accessibility service)"))
+                    else call.respondText(ui, ContentType.Application.Json)
                 }
 
                 get("/frame") {
@@ -101,44 +109,64 @@ class ManagedServer(
                 // ---- MCP ----
                 post("/mcp") {
                     val body = call.receiveText()
+                    val sid = call.request.queryParameters["sessionId"]
                     val resp = mcp.handle(body)
-                    if (resp == null) call.respond(HttpStatusCode.Accepted, "")
-                    else call.respondText(resp, ContentType.Application.Json)
+                    if (sid != null) {
+                        // SSE 传输：响应经该会话的 SSE 通道推回，POST 立即 202
+                        if (resp != null) sessions[sid]?.trySend(resp)
+                        call.respond(HttpStatusCode.Accepted, "")
+                    } else if (resp == null) {
+                        call.respond(HttpStatusCode.Accepted, "")
+                    } else {
+                        call.respondText(resp, ContentType.Application.Json)
+                    }
                 }
                 get("/mcp/sse") {
                     val sid = java.util.UUID.randomUUID().toString()
-                    sessions[sid] = true
-                    call.respondTextWriter(ContentType.Text.EventStream) {
-                        write("event: endpoint\ndata: /mcp?sessionId=" + sid + "\n\n")
-                        flush()
-                        var i = 0
-                        while (i++ < 600 && sessions.containsKey(sid)) {
-                            write(": ping\n\n"); flush()
-                            kotlinx.coroutines.delay(5_000)
+                    val ch = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+                    sessions[sid] = ch
+                    try {
+                        call.respondTextWriter(ContentType.Text.EventStream) {
+                            write("event: endpoint\ndata: /mcp?sessionId=" + sid + "\n\n")
+                            flush()
+                            for (msg in ch) {
+                                write("event: message\ndata: " + msg + "\n\n")
+                                flush()
+                            }
                         }
+                    } finally {
                         sessions.remove(sid)
                     }
                 }
 
                 // ---- MJPEG 视频流 ----
                 get("/stream") {
-                    call.respondOutputStream(
-                        ContentType.parse("multipart/x-mixed-replace; boundary=frame"),
-                    ) {
-                        var last = 0L
-                        while (true) {
-                            val bytes = runCatching { controller.captureFrame() }.getOrNull()
-                            if (bytes != null && bytes.isNotEmpty()) {
-                                write(("--frame\r\nContent-Type: image/png\r\nContent-Length: " + bytes.size + "\r\n\r\n").toByteArray())
-                                write(bytes)
-                                write("\r\n".toByteArray())
-                                flush()
-                                last = System.currentTimeMillis()
-                            } else if (System.currentTimeMillis() - last > 60_000) {
-                                break
+                    if (streamClients.get() >= MAX_STREAM_CLIENTS) {
+                        call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "too many stream clients"))
+                        return@get
+                    }
+                    streamClients.incrementAndGet()
+                    try {
+                        call.respondOutputStream(
+                            ContentType.parse("multipart/x-mixed-replace; boundary=frame"),
+                        ) {
+                            var last = 0L
+                            while (true) {
+                                val bytes = runCatching { controller.captureFrame() }.getOrNull()
+                                if (bytes != null && bytes.isNotEmpty()) {
+                                    write(("--frame\r\nContent-Type: image/png\r\nContent-Length: " + bytes.size + "\r\n\r\n").toByteArray())
+                                    write(bytes)
+                                    write("\r\n".toByteArray())
+                                    flush()
+                                    last = System.currentTimeMillis()
+                                } else if (System.currentTimeMillis() - last > 60_000) {
+                                    break
+                                }
+                                try { Thread.sleep(200) } catch (e: InterruptedException) { break }
                             }
-                            try { Thread.sleep(200) } catch (e: InterruptedException) { break }
                         }
+                    } finally {
+                        streamClients.decrementAndGet()
                     }
                 }
 
@@ -264,6 +292,11 @@ class ManagedServer(
 
     @Volatile
     private var running: io.ktor.server.engine.ApplicationEngine? = null
+
+    companion object {
+        /** MJPEG 同时在线客户端上限。 */
+        const val MAX_STREAM_CLIENTS = 8
+    }
 
     data class LaunchReq(val pkg: String, val component: String? = null)
     data class TapReq(val x: Int, val y: Int)

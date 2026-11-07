@@ -22,6 +22,9 @@ interface ScreenController {
 
     /** 在被托管屏上注入滑动。 */
     fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durMs: Int): Boolean
+
+    /** 读取被托管 App 界面元素（JSON 数组字符串）；不可用时 null。 */
+    fun readUi(): String?
 }
 
 data class AppInfo(

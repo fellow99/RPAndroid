@@ -33,6 +33,7 @@ object ManagedRuntime {
         val shell = NoRootShell(app)
         controllerRef = controller
         shellRef = shell
+        controller.uiReader = { com.managedfloating.app.a11y.MfaAccessibilityService.instance?.dumpUi() }
         ManagedBridge.bind(controller)
         val cfg = ServerConfig(app)
         val s = ManagedServer(

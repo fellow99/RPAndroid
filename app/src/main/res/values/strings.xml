@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">ManagedFloatingApp</string>
+    <string name="a11y_desc">读取被托管 App 的界面控件（仅本机使用，不外传）</string>
 </resources>

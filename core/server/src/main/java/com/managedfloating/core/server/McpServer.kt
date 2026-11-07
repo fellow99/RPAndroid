@@ -84,6 +84,7 @@ class McpServer(
         fun prop(type: String, desc: String) = JSONObject().put("type", type).put("description", desc)
 
         tool("screen_capture", "Capture current hosted screen as base64 PNG", JSONObject(), emptyList())
+        tool("ui_read", "Read the hosted app UI element tree (JSON; requires accessibility service)", JSONObject(), emptyList())
         tool(
             "screen_tap", "Tap at virtual-screen coordinates",
             JSONObject().put("x", prop("integer", "x")).put("y", prop("integer", "y")),
@@ -120,6 +121,7 @@ class McpServer(
             val bytes = controller.captureFrame()
             if (bytes == null) "no frame" else Base64.encodeToString(bytes, Base64.NO_WRAP)
         }
+        "ui_read" -> controller.readUi() ?: "ui unavailable (enable accessibility service)"
         "screen_tap" -> "ok=${controller.tap(args.optInt("x"), args.optInt("y"))}"
         "screen_swipe" -> "ok=${controller.swipe(
             args.optInt("x1"), args.optInt("y1"), args.optInt("x2"), args.optInt("y2"),
