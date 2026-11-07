@@ -138,6 +138,13 @@ class AdbConnection private constructor(
             return b
         }
 
+        /** 带超时的读：超时返回 [AdbConnection.TIMEOUT] 哨兵（用 [AdbConnection.isTimeout] 判断）。 */
+        fun readOrTimeout(timeoutMs: Long): ByteArray? {
+            val b = incoming.poll(timeoutMs, TimeUnit.MILLISECONDS) ?: return TIMEOUT
+            if (b === EOF) return null
+            return b
+        }
+
         /** 读到对方关闭为止。 */
         fun readAll(): ByteArray {
             val out = ByteArrayOutputStream()
@@ -196,6 +203,10 @@ class AdbConnection private constructor(
 
     companion object {
         private val EOF = ByteArray(0)
+
+        /** [AdbStream.readOrTimeout] 的"超时"哨兵。 */
+        val TIMEOUT = ByteArray(0)
+        fun isTimeout(b: ByteArray?): Boolean = b != null && b.isEmpty()
         private val HOST_BANNER = "host::\u0000".toByteArray(Charsets.US_ASCII)
 
         /** 连上本机 [host]:[port] 的 adbd。校验结果同时就是实际连接地址,不再解析原 host。 */

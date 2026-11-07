@@ -1,7 +1,6 @@
 package com.managedfloating.app
 
 import android.app.Activity
-import android.content.Intent
 import android.os.Bundle
 import android.widget.TextView
 
@@ -17,7 +16,6 @@ import android.widget.TextView
 class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        startService(Intent(this, ManagedService::class.java))
         setContentView(
             TextView(this).apply {
                 text = "ManagedFloatingApp\n(scaffold placeholder)"

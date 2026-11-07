@@ -72,6 +72,33 @@ class ManagedServer(
                     call.respond(mapOf("ok" to ok))
                 }
 
+                // 仅调试：免 root 连接 + 执行一条 shell 命令（配对已完成时用）。
+                post("/debug/connect") {
+                    val b = mapper.readValue<ConnectReq>(call.receive<String>())
+                    val hs = shell
+                    if (hs == null) {
+                        call.respond(mapOf("connected" to false, "error" to "no shell"))
+                        return@post
+                    }
+                    val connected = withContext(Dispatchers.IO) { hs.connect(b.connectPort) }
+                    val output = if (connected) {
+                        withContext(Dispatchers.IO) {
+                            when {
+                                b.hold == true -> hs.startHelper(b.command ?: "id")
+                                b.pty == true -> hs.runPty(b.command ?: "id")
+                                else -> hs.run(b.command ?: "id")
+                            }
+                        }
+                    } else null
+                    call.respond(
+                        mapOf(
+                            "connected" to connected,
+                            "output" to output,
+                            "error" to hs.lastError?.toString(),
+                        ),
+                    )
+                }
+
                 // 仅调试：免 root 配对 + 连接 + 执行一条 shell 命令，返回结果。
                 post("/debug/pair") {
                     val b = mapper.readValue<PairReq>(call.receive<String>())
@@ -128,5 +155,11 @@ class ManagedServer(
         val code: String,
         val connectPort: Int? = null,
         val command: String? = null,
+    )
+    data class ConnectReq(
+        val connectPort: Int? = null,
+        val command: String? = null,
+        val pty: Boolean? = null,
+        val hold: Boolean? = null,
     )
 }

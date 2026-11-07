@@ -72,6 +72,73 @@ class NoRootShell(private val context: Context) {
         }
     }
 
+    /** 保持着的 pty 助手流（不关闭则 adbd 会话存活、助手进程存活）。 */
+    @Volatile
+    private var helperStream: com.managedfloating.core.shell.adb.AdbConnection.AdbStream? = null
+
+    /**
+     * 启动常驻 shell 助手：开一条 pty 流执行 [command]，**保持流不关**。
+     * 本机（MIUI/Android 13）上 adbd 会话结束会杀掉该会话进程组，setsid 无法脱离；
+     * 因此靠“App 进程持有该 pty 流”来维持助手会话存活。App 进程死了助手才退，属可接受。
+     */
+    suspend fun startHelper(command: String): String? = withContext(Dispatchers.IO) {
+        try {
+            helperStream?.close()
+            val stream = connected?.open("shell:$command") ?: return@withContext null
+            val out = StringBuilder()
+            val deadline = System.currentTimeMillis() + 4_000
+            while (System.currentTimeMillis() < deadline) {
+                val chunk = stream.readOrTimeout(500) ?: break
+                if (AdbConnection.isTimeout(chunk)) {
+                    if (out.isNotEmpty()) break
+                    continue
+                }
+                out.append(String(chunk, Charsets.UTF_8))
+                if (out.contains("started")) break
+            }
+            helperStream = stream   // 保持不关
+            out.toString()
+        } catch (e: Exception) {
+            lastError = e
+            null
+        }
+    }
+
+    fun stopHelper() {
+        runCatching { helperStream?.close() }
+        helperStream = null
+    }
+
+    /**
+     * 经 adb 的 **pty shell** 服务运行命令（`shell:`）。
+     * 与 [run]（`exec:`，会话结束即杀进程组）不同，pty 会话里用 setsid 脱离的子进程能存活，
+     * 是拉起常驻 shell 助手（持有虚拟屏）的正确通道。
+     */
+    suspend fun runPty(command: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val stream = connected?.open("shell:$command") ?: return@withContext null
+            try {
+                val out = StringBuilder()
+                val deadline = System.currentTimeMillis() + 5_000
+                while (System.currentTimeMillis() < deadline) {
+                    val chunk = stream.readOrTimeout(500)
+                    if (chunk == null) break
+                    if (AdbConnection.isTimeout(chunk)) continue
+                    out.append(String(chunk, Charsets.UTF_8))
+                    if (out.contains("launched")) break
+                }
+                stream.close()
+                out.toString()
+            } catch (e: Exception) {
+                lastError = e
+                null
+            }
+        } catch (e: Exception) {
+            lastError = e
+            null
+        }
+    }
+
     @Volatile
     var lastError: Throwable? = null; private set
 
