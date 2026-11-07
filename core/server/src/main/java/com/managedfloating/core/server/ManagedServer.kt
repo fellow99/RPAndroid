@@ -29,6 +29,7 @@ class ManagedServer(
     private val port: Int,
     private val shell: NoRootShell? = null,
     private val appContext: android.content.Context? = null,
+    private val authToken: String = "",
 ) {
 
     private val mapper = jacksonObjectMapper()
@@ -37,6 +38,17 @@ class ManagedServer(
         if (running != null) return
         val s = embeddedServer(CIO, port = port) {
             install(ContentNegotiation) { jackson() }
+            install(createApplicationPlugin("TokenAuth") {
+                onCall { call ->
+                    val path = call.request.local.uri
+                    if (authToken.isNotEmpty() && path != "/health" && !path.startsWith("/debug/")) {
+                        val got = call.request.headers[ServerConfig.HEADER]
+                        if (got != authToken) {
+                            call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "unauthorized"))
+                        }
+                    }
+                }
+            })
             routing {
                 get("/health") { call.respond(mapOf("ok" to true, "service" to "ManagedFloatingApp")) }
 
@@ -55,8 +67,14 @@ class ManagedServer(
 
                 get("/frame") {
                     val bytes = withContext(Dispatchers.IO) { controller.captureFrame() }
-                    if (bytes == null) call.respond(HttpStatusCode.NotFound, mapOf("error" to "no frame"))
-                    else call.respondBytes(bytes, ContentType.Image.PNG)
+                    if (bytes == null) {
+                        val sess = (controller as? com.managedfloating.core.controller.AppScreenController)?.vdSession != null
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "no frame", "session" to sess))
+                    } else if (bytes.isEmpty()) {
+                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "empty frame"))
+                    } else {
+                        call.respondBytes(bytes, ContentType.Image.PNG)
+                    }
                 }
 
                 post("/action/tap") {
@@ -71,6 +89,13 @@ class ManagedServer(
                         controller.swipe(b.x1, b.y1, b.x2, b.y2, b.durMs ?: 300)
                     }
                     call.respond(mapOf("ok" to ok))
+                }
+
+                // 仅调试：设置 token（写入后需重启 App 生效）。
+                post("/debug/set-token") {
+                    val b = mapper.readValue<TokenReq>(call.receive<String>())
+                    appContext?.let { ServerConfig(it).token = b.token }
+                    call.respond(mapOf("ok" to true, "note" to "restart app to apply"))
                 }
 
                 // 仅调试：初始化 VdSession（连 adbd + 拉起助手），之后 /session/launch /frame /action 真正生效。
@@ -188,6 +213,7 @@ class ManagedServer(
         val pty: Boolean? = null,
         val hold: Boolean? = null,
     )
+    data class TokenReq(val token: String)
     data class SessionStartReq(
         val connectPort: Int? = null,
         val width: Int? = null,

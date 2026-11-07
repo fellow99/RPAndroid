@@ -119,7 +119,7 @@ object VdHelper {
     private fun captureFrame(reader: ImageReader, path: String) {
         var img = reader.acquireLatestImage()
         var tries = 0
-        while (img == null && tries < 20) { Thread.sleep(50); img = reader.acquireLatestImage(); tries++ }
+        while (img == null && tries < 60) { Thread.sleep(50); img = reader.acquireLatestImage(); tries++ }
         if (img == null) throw IllegalStateException("no frame")
         try {
             val pw = img.width; val ph = img.height

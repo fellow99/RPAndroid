@@ -98,10 +98,16 @@ class VdSessionImpl(
 
     override fun captureFrame(): ByteArray? {
         val path = File(ipcDir, "frame.png")
-        path.delete()
-        val out = command("frame", path.absolutePath) ?: return null
-        val f = File(out)
-        return if (f.exists() && f.length() > 0) f.readBytes() else null
+        repeat(4) { attempt ->
+            path.delete()
+            val out = command("frame", path.absolutePath)
+            android.util.Log.d("VdSession", "frame attempt=$attempt out=$out exists=${path.exists()} len=${path.length()}")
+            if (out != null && path.exists() && path.length() > 0) {
+                return path.readBytes()
+            }
+            if (attempt < 3) Thread.sleep(400)
+        }
+        return null
     }
 
     override fun tap(x: Int, y: Int): Boolean = command("tap", x.toString(), y.toString()) != null
