@@ -18,4 +18,10 @@ android {
 
 dependencies {
     implementation(project(":core:controller"))
+
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.cio)
+    implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.serialization.jackson)
+    implementation(libs.jackson.module.kotlin)
 }

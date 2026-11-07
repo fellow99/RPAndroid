@@ -1,14 +1,36 @@
 package com.managedfloating.core.controller
 
 /**
- * [ScreenController] —— 统一操作入口（架构 B）占位。
+ * [ScreenController] —— 读取与操作被托管 App 的唯一入口（架构 B）。
  *
- * 被 REST / MCP / 脚本 / 用户触摸共用的唯一控制器。
- * 后续里程碑实现：
- *  - 读：单帧截图（PNG/JPEG）、MJPEG 帧源、无障碍控件树 → 元素列表
- *  - 写：点击 / 滑动 / 长按 / 输入 / 按键 / 返回 / 启动 / 切换
- *  - 把帧交给呈现模式与视频流；把触摸坐标回写虚拟屏
+ * 被 REST / MCP / 脚本 / 用户触摸共用。实现（[AppScreenController]）把操作委托给
+ * 免 root shell 助手（建虚拟屏 / 承载 / 注入 / 截帧），001-shell 提供底层机制。
  */
 interface ScreenController {
-    fun isActive(): Boolean
+
+    /** 列出系统已安装、可启动的 App。 */
+    fun listApps(): List<AppInfo>
+
+    /** 把 [packageName]/[component] 承载到自有虚拟屏。 */
+    fun launch(packageName: String, component: String?): LaunchResult
+
+    /** 返回当前被托管 App 的最新一帧（PNG），无则 null。 */
+    fun captureFrame(): ByteArray?
+
+    /** 在被托管屏（displayId）上注入点击。 */
+    fun tap(x: Int, y: Int): Boolean
+
+    /** 在被托管屏上注入滑动。 */
+    fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durMs: Int): Boolean
 }
+
+data class AppInfo(
+    val packageName: String,
+    val label: String,
+)
+
+data class LaunchResult(
+    val ok: Boolean,
+    val displayId: Int? = null,
+    val message: String = "",
+)
