@@ -48,11 +48,12 @@ class McpServer(
                 val name = params.optString("name")
                 val args = params.optJSONObject("arguments") ?: JSONObject()
                 val result = runCatching { callTool(name, args) }.getOrElse { "error: ${it.message}" }
+                val isErr = result.startsWith("error:") || result.startsWith("ok=false")
                 rpcResult(id, JSONObject().apply {
                     put("content", JSONArray().put(JSONObject().apply {
                         put("type", "text"); put("text", result)
                     }))
-                    put("isError", false)
+                    put("isError", isErr)
                 })
             }
             else -> rpcError(id, -32601, "method not found: $method")
@@ -122,11 +123,18 @@ class McpServer(
             if (bytes == null) "no frame" else Base64.encodeToString(bytes, Base64.NO_WRAP)
         }
         "ui_read" -> controller.readUi() ?: "ui unavailable (enable accessibility service)"
-        "screen_tap" -> "ok=${controller.tap(args.optInt("x"), args.optInt("y"))}"
-        "screen_swipe" -> "ok=${controller.swipe(
-            args.optInt("x1"), args.optInt("y1"), args.optInt("x2"), args.optInt("y2"),
-            args.optInt("durMs", 300),
-        )}"
+        "screen_tap" -> {
+            if (!args.has("x") || !args.has("y")) "error: missing required arguments 'x','y'"
+            else "ok=${controller.tap(args.optInt("x"), args.optInt("y"))}"
+        }
+        "screen_swipe" -> {
+            val need = listOf("x1", "y1", "x2", "y2")
+            if (need.any { !args.has(it) }) "error: missing required arguments $need"
+            else "ok=${controller.swipe(
+                args.optInt("x1"), args.optInt("y1"), args.optInt("x2"), args.optInt("y2"),
+                args.optInt("durMs", 300),
+            )}"
+        }
         "app_list" -> {
             val arr = JSONArray()
             controller.listApps().forEach {
@@ -135,11 +143,15 @@ class McpServer(
             arr.toString()
         }
         "app_launch" -> {
-            val r = controller.launch(
-                args.optString("packageName"),
-                args.optString("component").takeIf { it.isNotEmpty() },
-            )
-            "ok=${r.ok} ${r.message}"
+            val pkg = args.optString("packageName").trim()
+            if (pkg.isEmpty()) "error: missing required argument 'packageName'"
+            else {
+                val r = controller.launch(
+                    pkg,
+                    args.optString("component").takeIf { it.isNotEmpty() },
+                )
+                "ok=${r.ok} ${r.message}"
+            }
         }
         "task_list" -> taskApi?.listJson() ?: "[]"
         "task_create" -> {

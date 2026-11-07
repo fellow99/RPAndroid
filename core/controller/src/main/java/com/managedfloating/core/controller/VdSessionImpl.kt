@@ -28,7 +28,15 @@ class VdSessionImpl(
     private val cmdFile = File(ipcDir, "cmd.txt")
     private val resultFile = File(ipcDir, "result.txt")
     private val readyFile = File(ipcDir, "ready.txt")
-    private val seq = AtomicInteger(0)
+    // 用时间戳作基线，保证每次会话重建后 seq 仍单调递增且大于任何历史/残留指令，
+    // 避免 helper 端 lastSeq 被高 seq“污染”后永久忽略新指令。
+    private val seq = AtomicInteger(((System.currentTimeMillis() / 1000) % 1_000_000).toInt())
+
+    /**
+     * 文件 IPC 只有一对 cmd.txt/result.txt，必须串行：多个 HTTP 请求在不同 IO 线程并发调用时，
+     * 否则会互相覆盖指令/读到对方的结果，表现为偶发 no frame、ok=false。
+     */
+    private val ipcLock = Any()
 
     @Volatile private var started = false
 
@@ -63,28 +71,32 @@ class VdSessionImpl(
         }
     }
 
-    private fun command(op: String, vararg args: String): String? {
-        if (!started) return null
-        val s = seq.incrementAndGet()
-        try {
-            resultFile.delete()
-            cmdFile.writeText((listOf(s.toString(), op) + args).joinToString("|"))
-            val deadline = System.currentTimeMillis() + 8_000
-            while (System.currentTimeMillis() < deadline) {
-                if (resultFile.exists()) {
-                    val line = resultFile.readText().trim()
-                    val parts = line.split("|", limit = 3)
-                    if (parts.getOrNull(0)?.toIntOrNull() == s) {
-                        return if (parts.getOrNull(1) == "ok") parts.getOrNull(2) ?: "" else null
+    private fun command(op: String, vararg args: String): String? =
+        synchronized(ipcLock) {
+            if (!started) return@synchronized null
+            val s = seq.incrementAndGet()
+            try {
+                resultFile.delete()
+                cmdFile.writeText((listOf(s.toString(), op) + args).joinToString("|"))
+                val deadline = System.currentTimeMillis() + 8_000
+                while (System.currentTimeMillis() < deadline) {
+                    if (resultFile.exists()) {
+                        val line = resultFile.readText().trim()
+                        val parts = line.split("|", limit = 3)
+                        if (parts.getOrNull(0)?.toIntOrNull() == s) {
+                            return@synchronized if (parts.getOrNull(1) == "ok") parts.getOrNull(2) ?: "" else null
+                        }
                     }
+                    Thread.sleep(50)
                 }
-                Thread.sleep(50)
+                null
+            } catch (e: Exception) {
+                null
+            } finally {
+                // 确保下一条指令不会读到本次残留
+                runCatching { cmdFile.delete() }
             }
-            return null
-        } catch (e: Exception) {
-            return null
         }
-    }
 
     override fun launch(packageName: String, component: String?): LaunchResult {
         val target = when {
@@ -98,14 +110,15 @@ class VdSessionImpl(
 
     override fun captureFrame(): ByteArray? {
         val path = File(ipcDir, "frame.png")
-        repeat(4) { attempt ->
+        // 锁内串行；最多 3 轮，每轮都是全新 seq 的指令（command 内部已处理重试等待）。
+        repeat(3) { attempt ->
             path.delete()
             val out = command("frame", path.absolutePath)
             android.util.Log.d("VdSession", "frame attempt=$attempt out=$out exists=${path.exists()} len=${path.length()}")
             if (out != null && path.exists() && path.length() > 0) {
                 return path.readBytes()
             }
-            if (attempt < 3) Thread.sleep(400)
+            if (attempt < 2) Thread.sleep(300)
         }
         return null
     }

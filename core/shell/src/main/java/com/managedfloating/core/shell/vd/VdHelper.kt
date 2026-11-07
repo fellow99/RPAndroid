@@ -34,6 +34,13 @@ object VdHelper {
     private const val FLAG_OWN_FOCUS = 1 shl 14
     private const val FLAG_STEAL_TOP_FOCUS_DISABLED = 1 shl 16
 
+    /** seq 回退超过该阈值即判定为新会话/计数器回绕，重置 lastSeq 基线。 */
+    private const val WRAP_THRESHOLD = 100_000
+
+    /** 最后成功编码的一帧 PNG；静态画面无新帧时复用。 */
+    @Volatile
+    private var lastFrame: ByteArray? = null
+
     @JvmStatic
     fun main(args: Array<String>) {
         val ipcDir = File(args.getOrElse(0) { "/sdcard/Android/data/com.managedfloating.app/files/mfa" })
@@ -76,6 +83,10 @@ object VdHelper {
             if (text.isNotEmpty()) {
                 val parts = text.split("|")
                 val seq = parts.getOrNull(0)?.toIntOrNull() ?: 0
+                // 接受单调递增指令；也接受“新会话/回绕”：seq 明显回退（差值超阈值）时重置基线。
+                // 避免旧的高 seq 残留把新会话的指令永久挡掉。
+                val wrapped = seq < lastSeq && (lastSeq - seq) > WRAP_THRESHOLD
+                if (wrapped) lastSeq = 0
                 if (seq > lastSeq) {
                     val op = parts.getOrNull(1) ?: ""
                     val a = parts.drop(2)
@@ -117,19 +128,47 @@ object VdHelper {
     }
 
     private fun captureFrame(reader: ImageReader, path: String) {
+        // 先尝试拿最新帧；静态画面下 SurfaceFlinger 不重绘，acquireLatestImage 可能长时间返回 null。
         var img = reader.acquireLatestImage()
         var tries = 0
-        while (img == null && tries < 60) { Thread.sleep(50); img = reader.acquireLatestImage(); tries++ }
-        if (img == null) throw IllegalStateException("no frame")
-        try {
-            val pw = img.width; val ph = img.height
-            val plane = img.planes[0]
-            val bmp = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888)
-            bmp.copyPixelsFromBuffer(plane.buffer)
-            FileOutputStream(path).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        } finally {
-            img.close()
+        while (img == null && tries < 10) { Thread.sleep(50); img = reader.acquireLatestImage(); tries++ }
+        if (img != null) {
+            try {
+                lastFrame = renderPng(img)
+            } finally {
+                img.close()
+            }
         }
+        // 无新帧时复用最后一帧（屏幕未变化，这是正确的当前画面）。
+        val frame = lastFrame ?: throw IllegalStateException("no frame")
+        FileOutputStream(path).use { it.write(frame) }
+    }
+
+    /** 把一帧 Image 编码为 PNG 字节，正确处理 rowStride/pixelStride，避免横向撕裂。 */
+    private fun renderPng(img: android.media.Image): ByteArray {
+        val pw = img.width; val ph = img.height
+        val plane = img.planes[0]
+        val buf = plane.buffer
+        val rowStride = plane.rowStride
+        val pixelStride = plane.pixelStride
+        val bmp = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888)
+        if (pixelStride == 4 && rowStride == pw * 4) {
+            bmp.copyPixelsFromBuffer(buf)
+        } else {
+            val rowBytes = pw * 4
+            val row = ByteArray(rowStride)
+            val packed = ByteArray(rowBytes * ph)
+            for (y in 0 until ph) {
+                buf.position(y * rowStride)
+                buf.get(row, 0, minOf(rowStride, buf.remaining()))
+                System.arraycopy(row, 0, packed, y * rowBytes, rowBytes)
+            }
+            bmp.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(packed))
+        }
+        val out = java.io.ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+        bmp.recycle()
+        return out.toByteArray()
     }
 
     private fun exec(command: String) {
