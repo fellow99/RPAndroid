@@ -1,10 +1,11 @@
 package com.managedfloating.core.shell
 
 import android.content.Context
+import com.managedfloating.core.shell.adb.AndroidAdb
 import com.managedfloating.core.shell.adb.AdbConnection
 import com.managedfloating.core.shell.adb.AdbConnectPort
 import com.managedfloating.core.shell.adb.AdbPairing
-import com.managedfloating.core.shell.adb.AndroidAdb
+import com.managedfloating.core.shell.adb.NsdAdbServiceFinder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -38,7 +39,7 @@ class NoRootShell(private val context: Context) {
         }
     }
 
-    /** 连接本机 adbd（无线调试）。[connectPort] 为 null 时自动探测。 */
+    /** 连接本机 adbd（无线调试）。[connectPort] 为 null 时经 mDNS + 系统属性自动探测。 */
     suspend fun connect(connectPort: Int? = null): Boolean = withContext(Dispatchers.IO) {
         try {
             connected?.close()
@@ -48,7 +49,7 @@ class NoRootShell(private val context: Context) {
             } else {
                 val acp = AdbConnectPort(
                     property = { ServiceProps.connectPort() },
-                    finder = AndroidAdbFinder,
+                    finder = NsdAdbServiceFinder(context),
                     cache = AndroidAdbPortCache,
                 )
                 acp.connect { host, port -> AdbConnection.open(host, port, tls, 10_000) }.also { connected = it }
@@ -91,11 +92,4 @@ private object AndroidAdbPortCache : com.managedfloating.core.shell.adb.PortCach
     @Volatile private var p: Int? = null
     override fun load(): Int? = p
     override fun save(port: Int) { p = port }
-}
-
-/** 简易服务发现：M1 先从系统属性 service.adb.tls.port 读连接端口；mDNS 可后续接入 NsdAdbServiceFinder。 */
-private object AndroidAdbFinder : com.managedfloating.core.shell.adb.AdbServiceFinder {
-    override suspend fun findPorts(serviceType: String, timeoutMs: Long): List<Int> {
-        return listOfNotNull(runCatching { System.getProperty("service.adb.tls.port")?.toIntOrNull() }.getOrNull())
-    }
 }

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.IBinder
 import com.managedfloating.core.controller.AppScreenController
 import com.managedfloating.core.server.ManagedServer
+import com.managedfloating.core.shell.NoRootShell
 
 /**
  * 后台服务：承载 [ManagedServer]（REST）并与 [AppScreenController] 接线。
@@ -24,7 +25,7 @@ class ManagedService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (server == null) {
-            server = ManagedServer(controller, PORT)
+            server = ManagedServer(controller, PORT, shell = NoRootShell(applicationContext))
         }
         server?.start()
         return START_STICKY

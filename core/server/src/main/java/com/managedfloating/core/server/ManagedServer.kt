@@ -3,6 +3,7 @@ package com.managedfloating.core.server
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.managedfloating.core.controller.ScreenController
+import com.managedfloating.core.shell.NoRootShell
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.jackson.jackson
@@ -20,11 +21,13 @@ import kotlinx.coroutines.withContext
 /**
  * [ManagedServer] —— 对外 REST 接口（架构 D）。
  *
- * 复用 [ScreenController] 作为唯一操作入口。局域网直连 / USB(adb reverse) 接入。
+ * 复用 [ScreenController] 作为唯一操作入口。[shell]（NoRootShell）用于免 root 自举调试。
+ * 局域网直连 / USB(adb forward) 接入。
  */
 class ManagedServer(
     private val controller: ScreenController,
     private val port: Int,
+    private val shell: NoRootShell? = null,
 ) {
 
     private val mapper = jacksonObjectMapper()
@@ -68,6 +71,29 @@ class ManagedServer(
                     }
                     call.respond(mapOf("ok" to ok))
                 }
+
+                // 仅调试：免 root 配对 + 连接 + 执行一条 shell 命令，返回结果。
+                post("/debug/pair") {
+                    val b = mapper.readValue<PairReq>(call.receive<String>())
+                    val hs = shell
+                    if (hs == null) {
+                        call.respond(mapOf("paired" to false, "connected" to false, "error" to "no shell"))
+                        return@post
+                    }
+                    val paired = withContext(Dispatchers.IO) { hs.pair(b.host, b.pairPort, b.code) }
+                    val connected = if (paired) withContext(Dispatchers.IO) { hs.connect(b.connectPort) } else false
+                    val output = if (connected) {
+                        withContext(Dispatchers.IO) { hs.run(b.command ?: "id") }
+                    } else null
+                    call.respond(
+                        mapOf(
+                            "paired" to paired,
+                            "connected" to connected,
+                            "output" to output,
+                            "error" to hs.lastError?.toString(),
+                        ),
+                    )
+                }
             }
         }
         // 独立线程 run：start(wait=true) 阻塞该线程，避免 CIO acceptJob 随调用线程协程被取消（Android 常见问题）。
@@ -96,4 +122,11 @@ class ManagedServer(
     data class LaunchReq(val pkg: String, val component: String? = null)
     data class TapReq(val x: Int, val y: Int)
     data class SwipeReq(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val durMs: Int? = null)
+    data class PairReq(
+        val host: String,
+        val pairPort: Int,
+        val code: String,
+        val connectPort: Int? = null,
+        val command: String? = null,
+    )
 }

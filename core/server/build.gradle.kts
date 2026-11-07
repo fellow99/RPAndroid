@@ -18,6 +18,7 @@ android {
 
 dependencies {
     implementation(project(":core:controller"))
+    implementation(project(":core:shell"))
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)
