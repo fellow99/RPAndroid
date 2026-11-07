@@ -15,6 +15,9 @@ import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
+import io.ktor.server.response.respondOutputStream
+import io.ktor.server.response.respondTextWriter
+import io.ktor.server.request.receiveText
 import io.ktor.server.routing.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -35,6 +38,8 @@ class ManagedServer(
 ) {
 
     private val mapper = jacksonObjectMapper()
+    private val mcp = McpServer(controller, taskApi)
+    private val sessions = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
     fun start() {
         if (running != null) return
@@ -91,6 +96,50 @@ class ManagedServer(
                         controller.swipe(b.x1, b.y1, b.x2, b.y2, b.durMs ?: 300)
                     }
                     call.respond(mapOf("ok" to ok))
+                }
+
+                // ---- MCP ----
+                post("/mcp") {
+                    val body = call.receiveText()
+                    val resp = mcp.handle(body)
+                    if (resp == null) call.respond(HttpStatusCode.Accepted, "")
+                    else call.respondText(resp, ContentType.Application.Json)
+                }
+                get("/mcp/sse") {
+                    val sid = java.util.UUID.randomUUID().toString()
+                    sessions[sid] = true
+                    call.respondTextWriter(ContentType.Text.EventStream) {
+                        write("event: endpoint\ndata: /mcp?sessionId=" + sid + "\n\n")
+                        flush()
+                        var i = 0
+                        while (i++ < 600 && sessions.containsKey(sid)) {
+                            write(": ping\n\n"); flush()
+                            kotlinx.coroutines.delay(5_000)
+                        }
+                        sessions.remove(sid)
+                    }
+                }
+
+                // ---- MJPEG 视频流 ----
+                get("/stream") {
+                    call.respondOutputStream(
+                        ContentType.parse("multipart/x-mixed-replace; boundary=frame"),
+                    ) {
+                        var last = 0L
+                        while (true) {
+                            val bytes = runCatching { controller.captureFrame() }.getOrNull()
+                            if (bytes != null && bytes.isNotEmpty()) {
+                                write(("--frame\r\nContent-Type: image/png\r\nContent-Length: " + bytes.size + "\r\n\r\n").toByteArray())
+                                write(bytes)
+                                write("\r\n".toByteArray())
+                                flush()
+                                last = System.currentTimeMillis()
+                            } else if (System.currentTimeMillis() - last > 60_000) {
+                                break
+                            }
+                            try { Thread.sleep(200) } catch (e: InterruptedException) { break }
+                        }
+                    }
                 }
 
                 // 脚本任务 CRUD 与执行
