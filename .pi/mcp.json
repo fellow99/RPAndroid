@@ -1,7 +1,10 @@
 {
   "mcpServers": {
     "ManagedFloatingApp": {
-      "url": "http://192.168.0.133:8099/mcp"
+      "url": "http://192.168.0.133:8099/mcp",
+      "headers": {
+        "Authorization": "Bearer s3cret"
+      }
     }
   }
 }
