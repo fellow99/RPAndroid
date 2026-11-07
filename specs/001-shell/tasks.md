@@ -1,42 +1,32 @@
-# 001-shell tasks.md — M1 托管 POC
+# 001-shell tasks.md — M1 托管 POC（✅ 全部完成）
 
 > 里程碑 M1：打通"建虚拟屏 → 启动 App → 截图 → 注入点击"一条链路（headless + REST 最小集）。
-> 目标设备：Android 16 / arm64（192.168.0.100:42215）。
-> 方法：分步实现，每步可编译 + 真机可测；完成后再 review。
+> 目标设备：Android 13（8f155833，免 root）+ Android 16 交叉验证。
+> **状态：M1-1 / M1-2 / M1-3 / M1-4 全部完成并在真机验证。**
 
-## 背景事实（设备探测）
-- 虚拟屏**只能**由 shell-UID 的 `app_process` 助手调用 `DisplayManager.createVirtualDisplay` 创建（`wm` 无 create-virtual）。
-- 免 root 让 App 自拉起 shell 助手 ⇒ 需自实现 ADB 客户端（配对 + 回环连 adbd + `app_process`）。
+## 任务与结果
 
-## 任务拆解（含依赖）
+### M1-1 建虚拟屏 + 承载 App + 截帧 —— ✅ 完成
+- 助手以 shell UID 建**可信虚拟屏**（trusted, flags 0x3dc9@SDK33 / 0x17dc9@SDK34+）。
+- 关键解法：公开 API `DisplayManager(com.android.shell context).createVirtualDisplay(...)` + 全套隐藏 flags + **ImageReader 截帧**（`screencap -d` 对虚拟屏不可靠）。
+- 验证：Android 13 id=2 / Android 16 id=10，承载 Settings 并截 720×1560 帧。
 
-### M1-1 机制证明（shell 助手建屏，电脑 adb 驱动）
-- [ ] 写最小 `app_process` 助手（shell UID），反射 `IDisplayManager` 创建虚拟屏。
-- [ ] 用电脑 adb `app_process` 启动助手，创建 1440×3200 虚拟屏。
-- [ ] `am start --display <id>` 把真实 App（如 Settings/浏览器）挪上该屏。
-- [ ] `screencap -d <id>` 从电脑截取该屏帧 → 验证"承载 + 截图"可行。
-- 依赖：无。产出：mechanism 证明 + 复用的助手核心。
+### M1-2 免 root 自举（ADB 客户端 + 配对）—— ✅ 完成
+- 移植 Mika `core/adb/`（SPAKE2/Ed25519 配对、TLS、CNXN/AUTH）+ `AndroidAdb`（Keystore 包装钥匙）+ 服务发现。
+- `NoRootShell`：`pair(host,pairPort,code)` → `connect(port)` → 拉起助手。
+- **关键平台约束**：本机（MIUI/Android 13）adbd 会话结束即杀进程组，**`setsid` 无效**；唯一可靠方式是 **App 持有 adbd `shell:`(pty) 流 + 命令前台常驻**（`startHelper`）。
+- 验证：App 自主配对成功、连接 `uid=2000(shell)`、经 pty 拉起助手建屏 id=5。
 
-### M1-2 免 root 自举（ADB 客户端 + 配对）
-- [ ] App 内实现 ADB 客户端：TLS 认证、回环连接本机 adbd、`app_process` 启动 M1-1 助手。
-- [ ] 无线调试配对流程（配对码 → 钥匙交换 → 保存 RSA 钥匙）。
-- [ ] 断开/重连恢复。
-- 依赖：M1-1（复用助手）。产出：App 无需电脑即可起助手。
+### M1-3 输入注入 —— ✅ 完成
+- `input -d <displayId> tap/swipe/keyevent` 精确命中虚拟屏上的 App。
+- 验证：back 导致 App 退出→空帧；swipe 前后帧 md5 变化（Android 13/16 均复现）。
 
-### M1-3 帧出口 + 输入注入
-- [ ] 助手把虚拟屏 `setSurface`（app 侧 ImageReader Surface 跨进程）→ app 直收帧。
-- [ ] 注入输入：`input tap/swipe -d <id>`（经助手/`IWindowManager`）。
-- 依赖：M1-1。产出：帧可读 + 可注入。
+### M1-4 ScreenController + Headless + REST —— ✅ 完成
+- `VdHelper`（**打进 APK**，用 App base.apk 作 CLASSPATH 加载）+ `VdSessionImpl`（文件 IPC）。
+- REST（Ktor+Jackson）：`/apps`、`/session/launch`、`/frame`(PNG)、`/action/tap`、`/action/swipe`。
+- 验证（Android 13）：`/session/launch` Settings→ok、`/frame`→200/99244B、`/action/tap`+`/swipe`→ok。
 
-### M1-4 ScreenController 最小集 + Headless + REST
-- [ ] `ScreenController`：captureFrame / tap / swipe / 启动 App / read 状态。
-- [ ] headless：仅截帧，无 UI 渲染。
-- [ ] Ktor REST 最小集：`/apps`、`/session/launch`、`/frame`、`/action/tap`、`/action/swipe`。
-- 依赖：M1-2、M1-3。产出：外部可经 REST 操作被托管 App。
-
-## 本次屏幕建议
-- **第一步优先 M1-1（机制证明）**：风险最低、信息量最大，直接验证本设备能否承载 + 截图。
-- M1-2（免 root 自举 ADB 客户端）工程量最大，成功后 M1-4 可用。"电脑兼任 S1 期间先不依赖它"（用电脑 adb 驱动助手测 M1-3/M1-4），M1-2 作为独立子里程碑后补。
-
-## 完成标准
-- M1-5：手机端 App 可经 REST 对"虚拟屏上的真实 App"截图 + 注入点击。
+## 遗留/后续（M1 之后，非阻塞）
+- 连接端口自动发现：`/proc/net/tcp` 在 App 内不可见（hidepid）；mDNS/扫描未命中 → 当前需提供连接端口（配对后缓存可复用）。
+- 配对 UI：目前经 `/debug/pair` 手动；正式需配置界面引导（读码可由无障碍自动）。
+- 服务前台化（Android 13+ 后台限制）、token 鉴权、MJPEG/WebRTC、MCP、脚本调度（M2–M4）。
