@@ -1,0 +1,44 @@
+[versions]
+# 构建工具链
+agp = "9.2.1"
+kotlin = "2.2.10"
+jvmTarget = "17"
+
+# Android SDK
+minSdk = "24"
+compileSdk = "36"
+targetSdk = "36"
+
+# AndroidX
+coreKtx = "1.16.0"
+composeBom = "2025.06.01"
+activityCompose = "1.10.1"
+lifecycle = "2.9.0"
+
+# Node 运行时（arm64-only）
+nodeBridge = "0.2.0"
+nodeRuntime = "26.13.0"
+
+[libraries]
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }
+
+# Compose
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+
+# Node 运行嵌入
+node-bridge = { module = "io.github.fellow99:node-bridge", version.ref = "nodeBridge" }
+node-runtime = { module = "io.github.fellow99:node-runtime", version.ref = "nodeRuntime" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
