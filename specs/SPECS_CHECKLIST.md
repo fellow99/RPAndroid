@@ -26,3 +26,14 @@
 | M-04 | 004-server 对外接口 | [spec.md](./004-server/spec.md) | [plan.md](./004-server/plan.md) |
 | M-05 | 005-script 脚本任务 | [spec.md](./005-script/spec.md) | [plan.md](./005-script/plan.md) |
 | M-06 | 006-config-ui 配置界面 | [spec.md](./006-config-ui/spec.md) | [plan.md](./006-config-ui/plan.md) |
+
+
+## 里程碑实现状态（as-built）
+
+| 里程碑 | 状态 | 证据 |
+|--------|------|------|
+| M1 托管 POC（建屏/承载/截帧/注入） | ✅ 完成 | logs/20261107-2, 20261107-3 |
+| M2 呈现与操作（浮窗/常规/headless + token + 会话恢复） | ✅ 完成 | logs/20261107-4 |
+| M3 脚本任务（Node :node 进程 + 立即/间隔/cron） | ✅ 完成 | logs/20261107-5 |
+| M4 对外协议（MCP + MJPEG 视频流） | ⏳ 未开始 | — |
+| M5 打磨（前台服务常驻/端口自动发现/文档） | ⏳ 部分 | — |
