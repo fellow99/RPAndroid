@@ -16,9 +16,15 @@ android {
         sourceCompatibility = JavaVersion.toVersion(libs.versions.jvmTarget.get())
         targetCompatibility = JavaVersion.toVersion(libs.versions.jvmTarget.get())
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
     api(libs.node.bridge)
     runtimeOnly(libs.node.runtime)
+
+    testImplementation("junit:junit:4.13.2")
 }

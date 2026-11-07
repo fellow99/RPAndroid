@@ -35,6 +35,8 @@ class ManagedServer(
     private val appContext: android.content.Context? = null,
     private val authToken: String = "",
     private val taskApi: TaskApi? = null,
+    /** 额外状态提供者（如无障碍是否启用），由 app 层注入。 */
+    private val statusProvider: (() -> Map<String, Any?>)? = null,
 ) {
 
     private val mapper = jacksonObjectMapper()
@@ -61,6 +63,31 @@ class ManagedServer(
             routing {
                 get("/health") { call.respond(mapOf("ok" to true, "service" to "ManagedFloatingApp")) }
 
+                get("/status") {
+                    val base = linkedMapOf<String, Any?>(
+                        "sessionActive" to controller.isSessionActive(),
+                        "port" to port,
+                        "authEnabled" to authToken.isNotEmpty(),
+                        "streamClients" to streamClients.get(),
+                        "sdkInt" to android.os.Build.VERSION.SDK_INT,
+                        "device" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+                    )
+                    statusProvider?.invoke()?.forEach { (k, v) -> base[k] = v }
+                    call.respond(base)
+                }
+
+                get("/logs") {
+                    val level = call.request.queryParameters["level"]?.uppercase()
+                    call.respond(MfaLog.snapshot(level).map {
+                        mapOf("time" to it.time, "level" to it.level, "tag" to it.tag, "msg" to it.msg)
+                    })
+                }
+
+                post("/logs/clear") {
+                    MfaLog.clear()
+                    call.respond(mapOf("ok" to true))
+                }
+
                 get("/apps") {
                     val apps = withContext(Dispatchers.IO) { controller.listApps() }
                     call.respond(apps)
@@ -71,6 +98,7 @@ class ManagedServer(
                     val result = withContext(Dispatchers.IO) {
                         controller.launch(body.pkg, body.component)
                     }
+                    if (!result.ok) MfaLog.w("Server", "launch failed pkg=${body.pkg}: ${result.message}")
                     call.respond(result)
                 }
 
@@ -95,6 +123,7 @@ class ManagedServer(
                 post("/action/tap") {
                     val b = mapper.readValue<TapReq>(call.receive<String>())
                     val ok = withContext(Dispatchers.IO) { controller.tap(b.x, b.y) }
+                    if (!ok) MfaLog.w("Server", "tap failed (${b.x},${b.y}) - session inactive?")
                     call.respond(mapOf("ok" to ok))
                 }
 
@@ -103,6 +132,7 @@ class ManagedServer(
                     val ok = withContext(Dispatchers.IO) {
                         controller.swipe(b.x1, b.y1, b.x2, b.y2, b.durMs ?: 300)
                     }
+                    if (!ok) MfaLog.w("Server", "swipe failed - session inactive?")
                     call.respond(mapOf("ok" to ok))
                 }
 
@@ -215,8 +245,22 @@ class ManagedServer(
                         )
                     }
                     val ok = withContext(Dispatchers.IO) { session.start() }
-                    if (ok) ctl.vdSession = session
+                    if (ok) {
+                        ctl.vdSession = session
+                        MfaLog.i("Server", "debug session started port=${b.connectPort}")
+                    } else {
+                        MfaLog.e("Server", "debug session failed: ${hs.lastError}")
+                    }
                     call.respond(mapOf("ok" to ok, "error" to hs.lastError?.toString()))
+                }
+
+                // 错误恢复：清理当前（可能已失效的）会话与助手，便于随后重新 /debug/session/start。
+                post("/debug/session/stop") {
+                    val ctl = controller
+                    if (ctl is com.managedfloating.core.controller.AppScreenController) ctl.vdSession = null
+                    runCatching { shell?.stopHelper() }
+                    MfaLog.w("Server", "session stopped via /debug/session/stop")
+                    call.respond(mapOf("ok" to true))
                 }
 
                 // 仅调试：免 root 连接 + 执行一条 shell 命令（配对已完成时用）。
@@ -277,6 +321,7 @@ class ManagedServer(
             } catch (t: Throwable) {
                 // 绑定失败等不应崩坏宿主进程；记日志
                 android.util.Log.e("ManagedServer", "server start failed", t)
+                MfaLog.e("Server", "start failed", t)
             }
         }.apply {
             isDaemon = true

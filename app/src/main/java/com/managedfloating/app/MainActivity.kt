@@ -1,11 +1,16 @@
 package com.managedfloating.app
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -99,8 +104,52 @@ class MainActivity : Activity() {
             }
         })
 
+        root.addView(Button(this).apply {
+            text = "启用无障碍服务（用于 ui_read 读界面）"
+            setOnClickListener {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                Toast.makeText(this@MainActivity, "请在列表中启用 ManagedFloatingApp", Toast.LENGTH_LONG).show()
+            }
+        })
+
         setContentView(ScrollView(this).apply { addView(root) })
+        requestNotificationPermission()
         loadApps()
+    }
+
+    /** Android 13+ 前台服务通知需运行时授权，否则通知不展示（服务本身仍可运行）。 */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                REQ_NOTIFICATIONS,
+            )
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_NOTIFICATIONS) {
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            Toast.makeText(
+                this,
+                if (granted) "通知权限已授予" else "未授予通知权限（不影响核心功能）",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    companion object {
+        private const val REQ_NOTIFICATIONS = 1001
     }
 
     private fun doStartSession() {

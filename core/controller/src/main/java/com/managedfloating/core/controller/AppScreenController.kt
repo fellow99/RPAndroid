@@ -73,6 +73,8 @@ class AppScreenController(private val context: Context) : ScreenController {
 
     override fun readUi(): String? = runCatching { uiReader?.invoke() }.getOrNull()
 
+    override fun isSessionActive(): Boolean = vdSession != null
+
     /** 会话通道目录（供嵌入的助手高效使用）。 */
     fun channel(): File = channelDir
 

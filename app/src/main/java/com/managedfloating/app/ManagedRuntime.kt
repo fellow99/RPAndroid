@@ -41,6 +41,12 @@ object ManagedRuntime {
             appContext = app,
             authToken = cfg.token,
             taskApi = com.managedfloating.app.script.TaskApiImpl(app),
+            statusProvider = {
+                mapOf(
+                    "accessibilityEnabled" to com.managedfloating.app.a11y.MfaAccessibilityService.isEnabled(),
+                    "cachedConnectPort" to cfg.connectPort,
+                )
+            },
         )
         server = s
         s.start()
@@ -49,7 +55,8 @@ object ManagedRuntime {
         if (savedPort in 1..65535) {
             Thread {
                 runCatching { startSession(savedPort) }.onSuccess { ok ->
-                    android.util.Log.i("ManagedRuntime", "auto-resume session port=$savedPort ok=$ok")
+                    com.managedfloating.core.server.MfaLog.i(
+                        "Runtime", "auto-resume session port=$savedPort ok=$ok")
                 }
             }.apply { name = "mfa-resume"; isDaemon = true }.start()
         }
@@ -89,8 +96,13 @@ object ManagedRuntime {
             height = height,
             dpi = dpi,
         )
-        return runCatching { session.start() }.getOrElse { false }.also { ok ->
+        return runCatching { session.start() }.getOrElse {
+            com.managedfloating.core.server.MfaLog.e("Runtime", "session start failed", it)
+            false
+        }.also { ok ->
             if (ok) {
+                com.managedfloating.core.server.MfaLog.i(
+                    "Runtime", "session ready port=$connectPort ${width}x$height")
                 c.vdSession = session
                 connectPort?.let { p -> com.managedfloating.core.server.ServerConfig(ctx).connectPort = p }
             }

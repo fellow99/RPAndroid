@@ -138,7 +138,7 @@ class ScriptService : Service() {
             val json = control?.listAppsJson() ?: "[]"
             """{"ok":true,"apps":$json}"""
         }
-        rt.host.register("log") { p -> android.util.Log.i("MfaScript", p); """{"ok":true}""" }
+        rt.host.register("log") { p -> com.managedfloating.core.server.MfaLog.i("Script", p); """{"ok":true}""" }
     }
 
     /** 阻塞等待某任务执行完成（供 REST/调度取结果）。 */
@@ -165,7 +165,7 @@ class ScriptService : Service() {
     }
 
     private fun notifyState(s: String) {
-        android.util.Log.i("MfaScript", s)
+        com.managedfloating.core.server.MfaLog.i("Script", s)
     }
 
     companion object {

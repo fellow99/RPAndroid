@@ -25,6 +25,9 @@ interface ScreenController {
 
     /** 读取被托管 App 界面元素（JSON 数组字符串）；不可用时 null。 */
     fun readUi(): String?
+
+    /** 当前是否已有可用的承载会话（虚拟屏 + 助手）。 */
+    fun isSessionActive(): Boolean
 }
 
 data class AppInfo(

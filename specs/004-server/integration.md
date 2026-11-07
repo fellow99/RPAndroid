@@ -36,7 +36,11 @@ adb reverse tcp:8099 tcp:8099
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/health` | 健康检查 |
+| GET | `/health` | 健康检查（开放） |
+| GET | `/status` | 运行状态：会话/鉴权/SDK/设备/无障碍/连接端口 |
+| GET | `/logs` | 最近 500 条统一日志（可选 `?level=E/W/I/D`） |
+| POST | `/logs/clear` | 清空日志缓冲 |
+| POST | `/debug/session/stop` | 错误恢复：清理失效会话/助手，随后可重新 start |
 | GET | `/apps` | 已安装可启动 App 列表 |
 | POST | `/session/launch` | `{"pkg":"...","component":"..."}` 承载 App 到虚拟屏 |
 | GET | `/frame` | 当前虚拟屏帧（PNG） |
