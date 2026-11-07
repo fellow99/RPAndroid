@@ -49,3 +49,19 @@
 ## 四、说明
 - 测试期 Python 在 Windows GBK 控制台解析 UTF-8 报错，属测试环境编码问题，非服务端缺陷（设 PYTHONIOENCODING=utf-8 后正常）。
 - 早期 tap ok=false 系手动注入高 seq 污染 helper 所致，已由 BUG-3 修复根治。
+
+## 五、最终自动化冒烟（Python urllib，14 项全过）
+```
+PASS ping
+PASS tools/list=9
+PASS screen_tap
+PASS screen_swipe
+PASS capture#1..#5 （连续 5 张，静态复用 + 新帧刷新均正常，69-71KB PNG）
+PASS app_list (15 apps)
+PASS missing arg isError=true
+PASS ui_read graceful
+PASS unknown method -32601
+PASS bad token 401
+=== FINAL: 14 PASS / 0 FAIL ===
+```
+（早先 shell 版冒烟的 3 个 "FAIL" 系 grep 匹配脚本问题，Python 权威回归全绿。）
