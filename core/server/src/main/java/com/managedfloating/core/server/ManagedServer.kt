@@ -52,9 +52,14 @@ class ManagedServer(
                 onCall { call ->
                     val path = call.request.local.uri
                     if (authToken.isNotEmpty() && path != "/health" && !path.startsWith("/debug/")) {
+                        val bearer = call.request.headers["Authorization"]
+                            ?.removePrefix("Bearer")?.trim()
                         val got = call.request.headers[ServerConfig.HEADER]
+                            ?: bearer
                             ?: call.request.queryParameters["token"]
                         if (got != authToken) {
+                            // 明确声明 Bearer 方案（非 OAuth），避免 MCP 客户端退化为动态客户端注册(DCR)
+                            call.response.headers.append("WWW-Authenticate", "Bearer realm=ManagedFloatingApp")
                             call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "unauthorized"))
                         }
                     }

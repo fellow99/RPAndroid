@@ -30,7 +30,12 @@ adb reverse tcp:8099 tcp:8099
 - 未设置 token 时所有端点开放（仅建议局域网可信环境）。
 - 设置 token 后，业务端点要求请求头：`X-Auth-Token: <token>`；`/health` 与 `/debug/*` 不校验。
 - 设置方式：App 界面「保存 token」（重启生效），或 `POST /debug/set-token {"token":"..."}`。
+- 也支持标准 **`Authorization: Bearer <token>`** 头（MCP 客户端默认方式）。
 - 也支持查询参数兜底：`?token=<token>`（便于浏览器/简单客户端）。
+- 未通过鉴权返回 `401` + `WWW-Authenticate: Bearer realm=ManagedFloatingApp`，
+  明确声明为 Bearer 方案（**非 OAuth**），避免 MCP 客户端退化为 OAuth 动态客户端注册(DCR)。
+  若客户端仍报 "OAuth dynamic client registration failed"，请在客户端里手动填 Bearer token，
+  关闭/忽略 OAuth 选项。
 
 ## 3. REST 端点
 
