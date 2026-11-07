@@ -91,7 +91,16 @@ public class HelperMain {
         }
         Thread.sleep(6000);
 
-        // capture one frame
+        // capture before-injection frame
+        capture("/data/local/tmp/mfa_before.png", reader);
+        Thread.sleep(14000); // window for the driver to inject input
+        // capture after-injection frame
+        capture("/data/local/tmp/mfa_after.png", reader);
+
+        Thread.sleep(5000L); // keep display alive; outer test will kill
+    }
+
+    private static void capture(String path, ImageReader reader) {
         try {
             Image img = reader.acquireLatestImage();
             if (img != null) {
@@ -99,19 +108,17 @@ public class HelperMain {
                 android.media.Image.Plane plane = img.getPlanes()[0];
                 Bitmap bmp = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888);
                 bmp.copyPixelsFromBuffer(plane.getBuffer());
-                FileOutputStream fos = new FileOutputStream("/data/local/tmp/mfa_frame.png");
+                FileOutputStream fos = new FileOutputStream(path);
                 bmp.compress(Bitmap.CompressFormat.PNG, 100, fos);
                 fos.flush(); fos.close();
                 img.close();
-                System.out.println("== FRAME_SAVED /data/local/tmp/mfa_frame.png " + pw + "x" + ph);
+                System.out.println("== FRAME_SAVED " + path + " " + pw + "x" + ph);
             } else {
-                System.out.println("== FRAME_NULL (no frame acquired)");
+                System.out.println("== FRAME_NULL (no frame acquired) @ " + path);
             }
         } catch (Throwable t) {
-            System.out.println("== frame capture err: " + t);
+            System.out.println("== frame capture err @ " + path + ": " + t);
         }
-
-        Thread.sleep(10_000L); // keep display alive; outer test will kill
     }
 
     private static int baseFlags() {
