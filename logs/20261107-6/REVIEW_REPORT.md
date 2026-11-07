@@ -1,22 +1,31 @@
-# REVIEW_REPORT — M4（MCP + MJPEG）
+# REVIEW_REPORT — M4（含补充任务）
 
-**范围：** M4（`e6b0a86`）
-**结论：** MCP（streamable HTTP + SSE）与 MJPEG 视频流已实现并真机验证。
+**范围：** M4 全部（`e6b0a86`、`ca4d0cc`）
+**结论：** MCP（streamable HTTP + SSE + session 关联）、MJPEG（限流）、`?token=`、`ui_read` 全部实现并验证。
 
 ## Critical
-- 无（构建期转义问题已在提交前修复）。
+- 无。
 
-## Important（记录）
-| # | 位置 | 发现 | 建议 |
-|---|------|------|------|
-| I-1 | `ManagedServer /stream` | 帧率固定 200ms；`respondOutputStream` 阻塞线程，多客户端会耗线程 | M5 改协程/限流 + 并发上限 |
-| I-2 | `McpServer` | 无会话状态（SSE sessionId 仅保活，不与 JSON-RPC 绑定） | 完整 MCP 可实现 session 关联 |
-| I-3 | 鉴权 | MCP/MJPEG 也走 token（除 /health、/debug/*）；SSE 客户端需带 header 或扩展 query token | 可加 `?token=` 兜底 |
-| I-4 | `McpServer` | `ui.read`（无障碍元素）未提供 | M5 补（需 AccessibilityService） |
+## Important —— 本轮全部关闭
+| # | 项目 | 状态 |
+|---|------|------|
+| I-1 | MJPEG 并发限流 | ✅ 已实现（8 路，超限 503） |
+| I-2 | SSE session 与 JSON-RPC 关联 | ✅ 已实现并验证（202 + SSE message 回推） |
+| I-3 | `?token=` 兜底 | ✅ 已实现并验证（401/200） |
+| I-4 | `ui_read` / `GET /ui` | ✅ 已实现（AccessibilityService）；⚠️ ROM 限制：仅默认 display |
+
+## 遗留（转入 M5）
+| # | 发现 | 建议 |
+|---|------|------|
+| R-1 | 无障碍 `windows` 不含虚拟屏（MIUI/Android 13 实测） | M5：shell 侧定向读取（uiautomator/反射）或换 ROM 验证 |
+| R-2 | MJPEG 用阻塞 IO + Thread.sleep，每路占线程 | M5：改协程 `writeFully` + 背压 |
+| R-3 | MCP 未实现 resources/prompts（仅 tools） | 视需要 |
+| R-4 | 前台服务通知在 Android 13 需 POST_NOTIFICATIONS | M5 加权限请求 |
 
 ## 验证核对
-- ✅ MCP initialize / tools/list / tools/call（screen_tap → ok=true、app_list）
-- ✅ SSE endpoint 事件
-- ✅ MJPEG 200 + multipart header + 持续推流（~453KB/3s）
-- ✅ 接入文档 specs/004-server/integration.md
-- ✅ 无敏感信息落盘（token/IP 用占位符）
+- ✅ MCP initialize / tools/list / tools/call（screen_tap ok、app_list、ui_read）
+- ✅ SSE：endpoint 事件 + POST 202 + `event: message` 回推
+- ✅ token：header 与 query 均 401/200 正确；/health 开放
+- ✅ MJPEG：200 + multipart 头 + 持续帧
+- ✅ /ui：200 + 元素 JSON（默认 display）
+- ✅ 无敏感信息落盘
