@@ -18,4 +18,5 @@ android {
 
 dependencies {
     implementation(project(":core:shell"))
+    implementation(libs.kotlinx.coroutines.core)
 }

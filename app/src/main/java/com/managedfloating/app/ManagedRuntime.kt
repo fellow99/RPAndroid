@@ -22,7 +22,7 @@ object ManagedRuntime {
         started = true
         val controller = AppScreenController(context.applicationContext)
         val shell = NoRootShell(context.applicationContext)
-        val s = ManagedServer(controller, ManagedService.PORT, shell)
+        val s = ManagedServer(controller, ManagedService.PORT, shell, appContext = context.applicationContext)
         server = s
         // ManagedServer 内部已用独立线程 start(wait=true)。
         s.start()

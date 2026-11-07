@@ -28,6 +28,7 @@ class ManagedServer(
     private val controller: ScreenController,
     private val port: Int,
     private val shell: NoRootShell? = null,
+    private val appContext: android.content.Context? = null,
 ) {
 
     private val mapper = jacksonObjectMapper()
@@ -70,6 +71,31 @@ class ManagedServer(
                         controller.swipe(b.x1, b.y1, b.x2, b.y2, b.durMs ?: 300)
                     }
                     call.respond(mapOf("ok" to ok))
+                }
+
+                // 仅调试：初始化 VdSession（连 adbd + 拉起助手），之后 /session/launch /frame /action 真正生效。
+                post("/debug/session/start") {
+                    val b = mapper.readValue<SessionStartReq>(call.receive<String>())
+                    val hs = shell
+                    val ctl = controller
+                    val ctx = appContext
+                    if (hs == null || ctx == null || ctl !is com.managedfloating.core.controller.AppScreenController) {
+                        call.respond(mapOf("ok" to false, "error" to "no shell/controller"))
+                        return@post
+                    }
+                    val session = withContext(Dispatchers.IO) {
+                        com.managedfloating.core.controller.VdSessionImpl(
+                            context = ctx,
+                            shell = hs,
+                            connectPort = b.connectPort,
+                            width = b.width ?: 720,
+                            height = b.height ?: 1560,
+                            dpi = b.dpi ?: 400,
+                        )
+                    }
+                    val ok = withContext(Dispatchers.IO) { session.start() }
+                    if (ok) ctl.vdSession = session
+                    call.respond(mapOf("ok" to ok, "error" to hs.lastError?.toString()))
                 }
 
                 // 仅调试：免 root 连接 + 执行一条 shell 命令（配对已完成时用）。
@@ -161,5 +187,11 @@ class ManagedServer(
         val command: String? = null,
         val pty: Boolean? = null,
         val hold: Boolean? = null,
+    )
+    data class SessionStartReq(
+        val connectPort: Int? = null,
+        val width: Int? = null,
+        val height: Int? = null,
+        val dpi: Int? = null,
     )
 }

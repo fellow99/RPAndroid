@@ -5,7 +5,7 @@ import com.managedfloating.core.shell.adb.AndroidAdb
 import com.managedfloating.core.shell.adb.AdbConnection
 import com.managedfloating.core.shell.adb.AdbConnectPort
 import com.managedfloating.core.shell.adb.AdbPairing
-import com.managedfloating.core.shell.adb.NsdAdbServiceFinder
+import com.managedfloating.core.shell.adb.ProcNetPortFinder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -49,8 +49,12 @@ class NoRootShell(private val context: Context) {
             } else {
                 val acp = AdbConnectPort(
                     property = { ServiceProps.connectPort() },
-                    finder = NsdAdbServiceFinder(context),
+                    finder = ProcNetPortFinder(),
                     cache = AndroidAdbPortCache,
+                    scan = com.managedfloating.core.shell.adb.LocalPortScan(
+                        scanner = com.managedfloating.core.shell.adb.NioPortScanner(),
+                        hosts = { listOf("127.0.0.1") },
+                    ),
                 )
                 acp.connect { host, port -> AdbConnection.open(host, port, tls, 10_000) }.also { connected = it }
             }
