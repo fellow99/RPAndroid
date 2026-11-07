@@ -24,3 +24,8 @@ logs/**/*.log
 *.keystore
 *.jks
 *.env
+
+tools/vdisplay/out/
+*.class
+*.dex
+
