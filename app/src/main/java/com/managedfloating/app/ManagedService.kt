@@ -3,14 +3,16 @@ package com.managedfloating.app
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import com.managedfloating.core.controller.ScreenController
+import com.managedfloating.core.server.ManagedServer
+import com.managedfloating.core.shell.NoRootShell
 
 /**
- * 服务占位：委托 [ManagedRuntime]（幂等）承载 REST 服务器。
- * 后续里程碑可升为前台服务承载任务调度（立即/间隔/cron）。
+ * 主进程服务：
+ * - 承载 REST 服务器（委托 ManagedRuntime，幂等）；
+ * - 通过 [IScreenControl] 向 :node 进程（脚本执行器）暴露屏幕控制。
  */
 class ManagedService : Service() {
-
-    override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -20,6 +22,30 @@ class ManagedService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ManagedRuntime.start(this)
         return START_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder = binder
+
+    private val binder = object : IScreenControl.Stub() {
+        private fun ctl(): ScreenController? = ManagedRuntime.controller()
+
+        override fun tap(x: Int, y: Int): Boolean = ctl()?.tap(x, y) ?: false
+        override fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durMs: Int): Boolean =
+            ctl()?.swipe(x1, y1, x2, y2, durMs) ?: false
+
+        override fun launch(pkg: String, component: String?): Boolean =
+            ctl()?.launch(pkg, component)?.ok ?: false
+
+        override fun captureFrame(): ByteArray? = ctl()?.captureFrame()
+
+        override fun listAppsJson(): String {
+            val apps = ctl()?.listApps() ?: emptyList()
+            val arr = org.json.JSONArray()
+            apps.forEach { a ->
+                arr.put(org.json.JSONObject().put("packageName", a.packageName).put("label", a.label))
+            }
+            return arr.toString()
+        }
     }
 
     companion object {

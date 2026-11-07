@@ -23,6 +23,8 @@ object ManagedRuntime {
 
     @Synchronized
     fun start(context: Context) {
+        // Application.onCreate 在每个进程都会跑；:node 进程只跑脚本，不启动 REST 服务器。
+        if (currentProcessName(context) != context.packageName) return
         if (started) return
         started = true
         val app = context.applicationContext
@@ -33,7 +35,12 @@ object ManagedRuntime {
         shellRef = shell
         ManagedBridge.bind(controller)
         val cfg = ServerConfig(app)
-        val s = ManagedServer(controller, cfg.port, shell, appContext = app, authToken = cfg.token)
+        val s = ManagedServer(
+            controller, cfg.port, shell,
+            appContext = app,
+            authToken = cfg.token,
+            taskApi = com.managedfloating.app.script.TaskApiImpl(app),
+        )
         server = s
         s.start()
         // 自动恢复上次会话（App 被系统回收重启后仍可用）
@@ -46,6 +53,11 @@ object ManagedRuntime {
             }.apply { name = "mfa-resume"; isDaemon = true }.start()
         }
     }
+
+    private fun currentProcessName(ctx: Context): String? = runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= 28) android.app.Application.getProcessName()
+        else Class.forName("android.app.ActivityThread").getMethod("currentProcessName").invoke(null) as String?
+    }.getOrNull() ?: ctx.packageName
 
     fun controller(): AppScreenController? = controllerRef
 

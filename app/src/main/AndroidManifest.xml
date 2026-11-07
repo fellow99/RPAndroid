@@ -38,7 +38,12 @@
         <service
             android:name=".script.ScriptService"
             android:exported="false"
+            android:process=":node"
             android:foregroundServiceType="specialUse" />
+
+        <receiver
+            android:name=".script.AlarmReceiver"
+            android:exported="false" />
 
     </application>
 

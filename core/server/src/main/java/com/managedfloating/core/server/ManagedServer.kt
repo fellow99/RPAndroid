@@ -14,6 +14,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -30,6 +31,7 @@ class ManagedServer(
     private val shell: NoRootShell? = null,
     private val appContext: android.content.Context? = null,
     private val authToken: String = "",
+    private val taskApi: TaskApi? = null,
 ) {
 
     private val mapper = jacksonObjectMapper()
@@ -89,6 +91,23 @@ class ManagedServer(
                         controller.swipe(b.x1, b.y1, b.x2, b.y2, b.durMs ?: 300)
                     }
                     call.respond(mapOf("ok" to ok))
+                }
+
+                // 脚本任务 CRUD 与执行
+                if (taskApi != null) {
+                    get("/tasks") { call.respondText(taskApi.listJson(), ContentType.Application.Json) }
+                    post("/tasks") {
+                        val ok = taskApi.upsert(call.receive<String>())
+                        call.respond(mapOf("ok" to ok))
+                    }
+                    delete("/tasks/{id}") {
+                        val id = call.parameters["id"] ?: return@delete call.respond(HttpStatusCode.BadRequest, mapOf("error" to "no id"))
+                        call.respond(mapOf("ok" to taskApi.delete(id)))
+                    }
+                    post("/tasks/{id}/run") {
+                        val id = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "no id"))
+                        call.respond(mapOf("ok" to taskApi.run(id)))
+                    }
                 }
 
                 // 仅调试：设置 token（写入后需重启 App 生效）。

@@ -30,6 +30,10 @@ android {
     packaging {
         jniLibs { useLegacyPackaging = false }
     }
+
+    buildFeatures {
+        aidl = true
+    }
 }
 
 dependencies {

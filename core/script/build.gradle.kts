@@ -19,6 +19,6 @@ android {
 }
 
 dependencies {
-    implementation(libs.node.bridge)
+    api(libs.node.bridge)
     runtimeOnly(libs.node.runtime)
 }
