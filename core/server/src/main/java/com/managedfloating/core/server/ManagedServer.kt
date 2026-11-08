@@ -144,6 +144,17 @@ class ManagedServer(
                     call.respond(result)
                 }
 
+                // 关闭虚拟屏上当前承载的应用（保留会话），返回应用列表（App 与 /client 共用）。
+                post("/session/close") {
+                    val ctl = controller
+                    if (ctl is com.managedfloating.core.controller.AppScreenController) {
+                        withContext(Dispatchers.IO) { ctl.closeHostedApp() }
+                        call.respond(mapOf("ok" to true))
+                    } else {
+                        call.respond(mapOf("ok" to false, "error" to "no controller"))
+                    }
+                }
+
                 get("/ui") {
                     val ui = withContext(Dispatchers.IO) { controller.readUi() }
                     if (ui == null) call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "ui unavailable (enable accessibility service)"))

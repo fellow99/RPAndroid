@@ -134,7 +134,7 @@ object ClientPage {
     <span class="badge" id="modeBadge"></span>
     <div class="hint" id="stageHint"></div>
     <div class="topbar" id="topbar">
-      <button class="iconbtn danger" id="btnClose" title="停止虚拟屏会话">✕</button>
+      <button class="iconbtn danger" id="btnClose" title="关闭当前托管应用（返回应用列表）">✕</button>
     </div>
   </div>
 </main>
@@ -769,15 +769,18 @@ object ClientPage {
       api("/logs/clear", { method: "POST" }).then(function () { refreshLogs(); }).catch(function () {});
     });
     qf("logLevel").addEventListener("change", refreshLogs);
-    // 主界面右上角浮动工具条：关闭 = 停止虚拟屏会话（与 App UI「关闭」行为一致）。
+    // 主界面右上角浮动工具条：✕ = 关闭当前托管应用（保留会话），返回应用列表。
     qf("btnClose").addEventListener("click", function () {
-      if (!window.confirm("确定停止虚拟屏会话？")) return;
-      api("/debug/session/stop", { method: "POST" })
+      if (!window.confirm("确定关闭当前托管应用？")) return;
+      api("/session/close", { method: "POST" })
         .then(function (r) { return r.json(); })
         .then(function (res) {
-          if (res && res.ok) { showToast("已停止会话"); loadStatus(); }
-          else showToast("停止会话失败");
-        }).catch(function () { showToast("停止会话失败"); });
+          if (res && res.ok) {
+            showToast("已关闭应用，请在「应用」中选择");
+            openTab("apps"); // 返回应用列表
+            loadStatus();
+          } else showToast("关闭失败");
+        }).catch(function () { showToast("关闭失败"); });
     });
 
     var stage = qf("stage");

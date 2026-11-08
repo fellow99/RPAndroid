@@ -109,6 +109,7 @@ object VdHelper {
                     val payload = try {
                         when (op) {
                             "launch" -> { exec("am start --display $displayId -n ${a[0]}"); "ok" }
+                            "closeapp" -> { exec("am force-stop ${a[0]}"); "ok" }
                             "frame" -> {
                                 // 交接模式（appSurface 非空）帧由 App 进程 FrameHub 自己取；旧路径仍由助手截帧写文件。
                                 if (reader != null) { captureFrame(reader, a[0]); a[0] } else a[0]

@@ -45,6 +45,20 @@ class AppScreenController(private val context: Context) : ScreenController {
         if (changed) onHostChanged?.invoke()
     }
 
+    /**
+     * 关闭虚拟屏上当前承载的应用（force-stop，保留会话/虚拟屏），并把承载状态清空、
+     * 返回“应用列表”状态（App UI / /client 均回到选择列表）。
+     */
+    fun closeHostedApp() {
+        val pkg = hostedPkg
+        val session = vdSession
+        if (pkg != null && session != null) {
+            runCatching { session.closeApp(pkg) }
+                .onFailure { android.util.Log.w("MFA/Controller", "close app $pkg failed: ${it.message}") }
+        }
+        clearHosted()
+    }
+
     override fun listApps(): List<AppInfo> {
         val intent = android.content.Intent(IntentAction.ACTION_MAIN).apply { addCategory(IntentCat.CATEGORY_LAUNCHER) }
         val resolved = pm.queryIntentActivities(intent, 0)
@@ -130,6 +144,8 @@ interface VdSession {
     fun tap(x: Int, y: Int): Boolean
     fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durMs: Int): Boolean
     fun pressKey(keyCode: Int): Boolean
+    /** 关闭虚拟屏上的 [packageName] 应用（保留会话；用于“返回应用列表”）。 */
+    fun closeApp(packageName: String): Boolean
     /** App 进程侧的共享帧源；无会话/未就绪返回 null。 */
     fun frameSource(): FrameSource?
 }

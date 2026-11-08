@@ -64,6 +64,10 @@ object ManagedRuntime {
                         "vScreenWidth" to cfg.vScreenWidth,
                         "vScreenHeight" to cfg.vScreenHeight,
                         "vScreenDpi" to cfg.vScreenDpi,
+                        // 当前承载应用（关闭后为 null，客户端据此回到应用列表）
+                        "hostedApp" to controller.hosted()?.let {
+                            mapOf("packageName" to it.packageName, "label" to it.label)
+                        },
                     )
                 },
             )
@@ -156,15 +160,11 @@ object ManagedRuntime {
     }
 
     /**
-     * 停止当前虚拟屏会话（释放帧源 + 清控制器承载 + 停助手）。供 App UI「关闭」按钮与 /client 关闭使用。
+     * 关闭虚拟屏上当前承载的应用（保留会话/虚拟屏），返回应用列表状态。
+     * 供 App UI「关闭」与 /client 关闭使用。
      */
-    fun stopSession() {
-        com.managedfloating.core.server.MfaLog.i("Runtime", "session stop requested")
-        val c = controllerRef ?: return
-        (c.vdSession as? com.managedfloating.core.controller.VdSessionImpl)?.release()
-        c.vdSession = null
-        c.clearHosted()
-        runCatching { shellRef?.stopHelper() }
+    fun closeHostedApp() {
+        controllerRef?.closeHostedApp()
     }
 
     @Volatile

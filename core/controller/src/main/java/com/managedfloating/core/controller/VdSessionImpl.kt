@@ -182,6 +182,8 @@ class VdSessionImpl(
 
     override fun pressKey(keyCode: Int): Boolean = command("key", keyCode.toString()) != null
 
+    override fun closeApp(packageName: String): Boolean = command("closeapp", packageName) != null
+
     /** 释放帧源等本会话持有的资源（新会话接管前调用，避免线程/读取器泄漏）。 */
     fun release() {
         started = false
