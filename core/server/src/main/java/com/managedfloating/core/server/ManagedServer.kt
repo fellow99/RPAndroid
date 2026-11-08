@@ -19,6 +19,9 @@ import io.ktor.server.response.respondOutputStream
 import io.ktor.server.response.respondTextWriter
 import io.ktor.server.request.receiveText
 import io.ktor.server.routing.*
+import io.ktor.server.websocket.*
+import io.ktor.websocket.CloseReason
+import io.ktor.websocket.close
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -44,10 +47,20 @@ class ManagedServer(
     private val sessions = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.channels.Channel<String>>()
     private val streamClients = java.util.concurrent.atomic.AtomicInteger(0)
 
+    /** 007-webrtc 推流（惰性；无 appContext 时禁用）。输入统一经 ScreenController（C-1）。 */
+    private val webrtc: com.managedfloating.core.webrtc.WebRtcPush? by lazy {
+        appContext?.let { ctx ->
+            com.managedfloating.core.webrtc.WebRtcPush(ctx, controller).also { p ->
+                p.onInput = { txt -> WebRtcWire.handleInput(controller, txt) }
+            }
+        }
+    }
+
     fun start() {
         if (running != null) return
         val s = embeddedServer(CIO, port = port) {
             install(ContentNegotiation) { jackson() }
+            install(WebSockets)
             install(createApplicationPlugin("TokenAuth") {
                 onCall { call ->
                     val path = call.request.local.uri
@@ -74,6 +87,7 @@ class ManagedServer(
                         "port" to port,
                         "authEnabled" to authToken.isNotEmpty(),
                         "streamClients" to streamClients.get(),
+                        "webrtcPeers" to (webrtc?.activePeers() ?: -1),
                         "sdkInt" to android.os.Build.VERSION.SDK_INT,
                         "device" to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
                     )
@@ -203,6 +217,24 @@ class ManagedServer(
                     } finally {
                         streamClients.decrementAndGet()
                     }
+                }
+
+                // ---- WebRTC：控制台页面 + 信令（007-webrtc）----
+                get("/webrtc") {
+                    val w = webrtc
+                    if (w == null) {
+                        call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "webrtc disabled (no app context)"))
+                        return@get
+                    }
+                    call.respondText(WebRtcConsole.PAGE, ContentType.Text.Html)
+                }
+                webSocket("/webrtc/signaling") {
+                    val w = webrtc
+                    if (w == null) {
+                        close(CloseReason(CloseReason.Codes.INTERNAL_ERROR, "webrtc disabled"))
+                        return@webSocket
+                    }
+                    WebRtcWire.handle(this, w, controller, authToken)
                 }
 
                 // 自动化服务任务 CRUD 与执行
