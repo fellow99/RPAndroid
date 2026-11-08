@@ -1,0 +1,57 @@
+# 播控客户端接入文档（/client）
+
+> 面向第三方：浏览器/手机浏览器的一站式播控台——观看并操作虚拟屏、切换应用、调度自动化、查看日志。
+> 相关文档：[REST API](./API.md) ｜ [WebRTC 界面推流](./WebRTC.md) ｜ [MJPEG 视频流](./MJPEG.md)
+
+- 端点：`GET /client?token=<token>`
+- 默认端口 `8099`；鉴权三通道与 [API.md §2](./API.md#2-鉴权) 相同（页面用查询参数 `?token=`，也可复用 localStorage 记忆）。
+- 页面**无鉴权**即可访问（静态壳，无任何敏感内容）；其内部调用的数据接口仍受 token 鉴权。
+
+## 1. 访问
+
+```text
+http://<手机IP>:8099/client                 # 服务未设 token 时直接进入
+http://<手机IP>:8099/client?token=<token>   # 已设 token 时直接进入
+```
+
+- 设备：同 [API.md §1](./API.md#1-网络接入)（局域网 Wi-Fi / USB `adb forward`）。
+- 页面进入先请求 `GET /health`：
+  - 服务不可达/异常 → 全屏错误浮窗（含「刷新」按钮）。
+  - `authEnabled=true` 且未带 token → 全屏 token 输入浮窗（强制，遮挡一切内容）；输入与验证通过后进入。
+  - 输入错误 → 提示「token 无效」；输入正确 → 更新地址栏 `?token=` 并进入主界面。
+
+## 2. 界面
+
+- **标题栏**：左=应用名「ManagedFloatingApp 客户端」；中=菜单【播控｜应用｜自动化｜日志】；右=`/status` 状态摘要
+  （会话/设备/RTC peers/流客户端/无障碍/鉴权/是否有自动化在执行）。
+- **播控**：主视图，关闭其它抽屉；主区域固定显示视频回显与模式徽标。
+- **应用**：右侧半屏抽屉列应用图标（`GET /apps` + `GET /apps/{pkg}/icon`），点击图标 → `POST /session/launch` 切换会话。
+- **自动化**：右侧半屏抽屉列自动化任务（图标+名称、执行时间设置、启用开关）；
+  启用项显示「执行/停止/编辑」按钮；同一时刻仅一个在执行（互斥，其它项按钮隐藏；停止后恢复）；编辑/新建打开表单。
+- **日志**：右侧半屏抽屉显示最近 500 条日志（`GET /logs`），支持级别过滤与清空。
+
+## 3. 视频回显与降级
+
+- 页面先调 `GET /frame`：
+  - 无图（404）→ 显示「暂无会话」提示，不发起视频流。
+  - 有图 → 发起 WebRTC（复用 [WebRTC.md](./WebRTC.md) 的信令与 DataChannel 输入协议）。
+- WebRTC 握手失败/超时/浏览器不支持 → 自动降级 MJPEG：显示 `GET /stream` 的图像，操作改走 REST
+  （`/action/tap`、`/action/swipe`、`/action/key`）。
+- 模式徽标：`RTC 已连接` ｜ `MJPEG 降级` ｜ `暂无会话`（便于排障）。
+- 操作方式：点按/拖动 = 点击/滑动，坐标按 video/img 显示区 letterbox 归一化后换算；按键
+  Backspace=返回、Enter=确认、Space=空格、Home=主页（WebRTC 走 DataChannel，MJPEG 走 `/action/key`）。
+
+## 4. 本页面新增的服务端点（详见 [API.md](./API.md)）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/client` | 播控客户端页面（无需鉴权） |
+| GET | `/apps/{pkg}/icon` | 应用图标 PNG（进程内缓存） |
+| POST | `/action/key` | 按键注入 `{"code":<keycode>}`（MJPEG 降级模式） |
+| POST | `/tasks/{id}/stop` | 停止自动化的执行/调度 |
+
+## 5. 限制与安全
+
+- 仅局域网（Wi-Fi / adb forward localhost）；页面依赖 WebRTC 时浏览器需为安全上下文（localhost / HTTPS），
+  否则自动走 MJPEG 降级（非安全上下文限制）。
+- **敏感信息**：真实 IP/token/账号/密码/凭据一律不写入本文档与页面；示例使用占位符 `<token>`/`<host>`。

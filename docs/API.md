@@ -56,10 +56,11 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 ### 4.1 系统与诊断
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/health` | 健康检查（无需鉴权） |
-| GET | `/status` | 运行状态：会话/鉴权/SDK/设备/无障碍/缓存端口/流客户端数 |
+| GET | `/health` | 健康检查（无需鉴权），返回 `ok/service/port/authEnabled` |
+| GET | `/status` | 运行状态：会话/鉴权/SDK/设备/无障碍/缓存端口/流客户端数/RTC peers/`runningTaskId` |
 | GET | `/logs` | 最近 500 条统一日志，可选 `?level=E/W/I/D` |
 | POST | `/logs/clear` | 清空日志缓冲 |
+| GET | `/client` | 播控客户端页面（无需鉴权，见 [Client.md](./Client.md)） |
 | POST | `/debug/session/start` | 建立托管会话（调试端点，无需 token） |
 | POST | `/debug/session/stop` | 清理失效会话/助手（错误恢复） |
 | POST | `/debug/set-token` | 设置 token（重启生效） |
@@ -68,10 +69,12 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/apps` | 已安装可启动 App 列表 |
+| GET | `/apps/{pkg}/icon` | 应用图标 PNG（进程内缓存）；未知包 404 |
 | POST | `/session/launch` | 承载 App 到虚拟屏，body：`{"pkg":"...","component":"..."}` |
 | GET | `/frame` | 当前虚拟屏帧（PNG）；无会话返回 404 |
 | POST | `/action/tap` | 点击，body：`{"x":360,"y":500}` |
 | POST | `/action/swipe` | 滑动，body：`{"x1":..,"y1":..,"x2":..,"y2":..,"durMs":300}` |
+| POST | `/action/key` | 按键注入，body：`{"code":4}`（MJPEG 降级模式按键） |
 | GET | `/ui` | 界面元素树（JSON，需启用无障碍服务；不可用时 503） |
 
 ### 4.3 自动化服务任务
@@ -80,10 +83,11 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 | GET | `/tasks` | 自动化服务任务列表 |
 | POST | `/tasks` | 创建/更新任务（JSON） |
 | DELETE | `/tasks/{id}` | 删除任务 |
-| POST | `/tasks/{id}/run` | 立即执行任务 |
+| POST | `/tasks/{id}/run` | 立即执行任务（互斥：已在执行其它任务时返回 `ok:false`） |
+| POST | `/tasks/{id}/stop` | 停止任务的执行/调度 |
 
-任务对象字段：`id,name,packageName,script,enabled,kind,intervalMs,cron`；
-`kind` 取值 `IMMEDIATE` / `INTERVAL` / `CRON`。
+任务对象字段：`id,name,packageName,script,enabled,kind,intervalMs,cron`（另含运行统计 `lastRunAt,nextRunAt,runCount,lastStatus`）；
+`kind` 取值 `IMMEDIATE` / `INTERVAL` / `CRON`。执行状态见 `GET /status` 的 `runningTaskId`。
 
 > MCP 侧另提供 `task_modify`（按 id 部分修改、保留运行统计）与 `task_docs`（返回 JS host 接口脚本文档），详见 [MCP.md](./MCP.md)。
 
