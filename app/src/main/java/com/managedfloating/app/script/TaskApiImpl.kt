@@ -37,6 +37,20 @@ class TaskApiImpl(private val ctx: Context) : TaskApi {
 
     override fun delete(id: String): Boolean = runCatching { store.delete(id); true }.getOrDefault(false)
 
+    override fun modify(id: String, patchJson: String): Boolean = runCatching {
+        val existing = store.get(id) ?: return@runCatching false
+        val patch = JSONObject(patchJson)
+        // 在现有任务上做部分字段覆盖，保留 id 与运行统计（runCount/lastRunAt/nextRunAt/lastStatus）。
+        val merged = JSONObject(existing.toJson()).apply {
+            for (key in patch.keys()) put(key, patch.get(key))
+            put("id", id) // id 以路径为准，不可被 patch 改写
+        }
+        val updated = ScriptTask.from(merged)
+        store.upsert(updated)
+        scheduler.rescheduleAll()
+        true
+    }.getOrDefault(false)
+
     override fun run(id: String): Boolean = runCatching {
         store.get(id) ?: return false
         scheduler.runNow(id)

@@ -65,7 +65,7 @@ curl -X POST http://localhost:8099/mcp \
 
 标准错误码：JSON 解析失败 `-32700`；未知方法 `-32601`；HTTP 鉴权失败 `401`。
 
-## 4. 工具清单（9 个）
+## 4. 工具清单（12 个）
 
 以 `tools/list` 实时返回为准。
 
@@ -87,8 +87,11 @@ curl -X POST http://localhost:8099/mcp \
 | 工具 | 说明 | 参数（`*` 为必填） |
 |------|------|--------------------|
 | `task_list` | 列出自动化服务任务 | 无 |
-| `task_create` | 创建/更新任务 | `task*`：`id,name,script,enabled,kind,intervalMs,cron` |
+| `task_create` | 创建/更新任务（全量 upsert，id 可省略自动生成） | `task*`：`id,name,script,enabled,kind,intervalMs,cron` |
+| `task_modify` | 按 id **部分修改**已存在任务，保留运行统计（runCount 等）；不存在返回错误 | `id*`，`patch*`（任意可编辑字段：`name,script,enabled,kind,intervalMs,cron,packageName`） |
+| `task_delete` | 按 id 删除任务 | `id*` |
 | `task_run` | 立即执行任务 | `id*` |
+| `task_docs` | 返回 JS 脚本文档：所有 `host.invoke` 应用层接口（`screen.tap/swipe/launch/frame`、`apps.list`、`log`）的签名、参数、返回与示例，供大模型准确生成脚本 | 无 |
 
 ## 5. 调用约定
 
@@ -119,4 +122,35 @@ curl -X POST http://localhost:8099/mcp \
 curl -X POST http://localhost:8099/mcp \
   -H 'Content-Type: application/json' -H 'Authorization: Bearer <token>' \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"screen_capture","arguments":{}}}'
+```
+
+## 7. 自动化任务脚本与 task_docs
+
+任务的 `script` 字段是运行在 Node 引擎中的 async JS，通过 `await host.invoke('<api>', {...})` 调用应用层接口。
+可用应用层接口（共 6 个）：
+
+| host API | 参数 | 返回 | 作用 |
+|----------|------|------|------|
+| `screen.tap` | `{x,y}` | `{ok}` | 虚拟屏点击 |
+| `screen.swipe` | `{x1,y1,x2,y2,durMs?}` | `{ok}` | 滑动（durMs 默认 300） |
+| `screen.launch` | `{pkg, component?}` | `{ok}` | 承载 App（字段名是 pkg） |
+| `screen.frame` | `{}` | `{ok, base64}` | 截屏（PNG base64） |
+| `apps.list` | `{}` | `{ok, apps[]}` | 列可启动应用 |
+| `log` | 任意对象 | `{ok}` | 写日志（REST `/logs` 可查） |
+
+大模型生成脚本前建议先调用 `task_docs` 获取权威签名与完整示例：
+
+```bash
+curl -X POST http://localhost:8099/mcp \
+  -H 'Content-Type: application/json' -H 'Authorization: Bearer <token>' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"task_docs","arguments":{}}}'
+```
+
+脚本示例：
+```js
+await host.invoke('screen.launch', { pkg: 'com.android.settings' });
+await new Promise(r => setTimeout(r, 2000));
+await host.invoke('screen.swipe', { x1: 360, y1: 1200, x2: 360, y2: 400, durMs: 500 });
+const f = await host.invoke('screen.frame', {});
+await host.invoke('log', { msg: 'captured ok=' + f.ok });
 ```

@@ -112,7 +112,24 @@ class McpServer(
                 "task_create", "Create/update an automation-service task (JSON: id,name,script,enabled,kind,intervalMs,cron)",
                 JSONObject().put("task", prop("object", "task object")), listOf("task"),
             )
+            tool(
+                "task_modify",
+                "Partially modify an existing task by id; runtime stats are kept. Args: id plus any editable fields (name,script,enabled,kind,intervalMs,cron,packageName)",
+                JSONObject()
+                    .put("id", prop("string", "task id"))
+                    .put("patch", prop("object", "fields to update")),
+                listOf("id", "patch"),
+            )
+            tool(
+                "task_delete", "Delete an automation-service task by id",
+                JSONObject().put("id", prop("string", "task id")), listOf("id"),
+            )
             tool("task_run", "Run an automation-service task now", JSONObject().put("id", prop("string", "task id")), listOf("id"))
+            tool(
+                "task_docs",
+                "Return the JS scripting guide: all host.invoke application-layer APIs (screen.tap/swipe/launch/frame, apps.list, log) with signatures and examples, for generating task scripts",
+                JSONObject(), emptyList(),
+            )
         }
         return arr
     }
@@ -158,7 +175,25 @@ class McpServer(
             val t = args.optJSONObject("task")
             if (t == null) "error: missing task" else "ok=${taskApi?.upsert(t.toString())}"
         }
+        "task_modify" -> {
+            val id = args.optString("id").trim()
+            val patch = args.optJSONObject("patch")
+            when {
+                id.isEmpty() -> "error: missing required argument 'id'"
+                patch == null -> "error: missing required argument 'patch'"
+                else -> {
+                    val ok = taskApi?.modify(id, patch.toString()) == true
+                    if (ok) "ok=true modified $id" else "error: task not found: $id"
+                }
+            }
+        }
+        "task_delete" -> {
+            val id = args.optString("id").trim()
+            if (id.isEmpty()) "error: missing required argument 'id'"
+            else "ok=${taskApi?.delete(id)} deleted $id"
+        }
         "task_run" -> "ok=${taskApi?.run(args.optString("id"))}"
+        "task_docs" -> TaskScriptDocs.text()
         else -> "error: unknown tool $name"
     }
 }

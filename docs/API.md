@@ -85,6 +85,8 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 任务对象字段：`id,name,packageName,script,enabled,kind,intervalMs,cron`；
 `kind` 取值 `IMMEDIATE` / `INTERVAL` / `CRON`。
 
+> MCP 侧另提供 `task_modify`（按 id 部分修改、保留运行统计）与 `task_docs`（返回 JS host 接口脚本文档），详见 [MCP.md](./MCP.md)。
+
 ## 5. 调用示例
 
 ```bash
