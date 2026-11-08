@@ -47,6 +47,11 @@ object ClientPage {
   #mock { display:none; }
   .badge { position:absolute; top:10px; left:12px; font-size:11px; color:#fff; background:rgba(0,0,0,.55);
            padding:3px 8px; border-radius:6px; }
+  .topbar { position:absolute; top:10px; right:12px; display:flex; gap:8px; z-index:5; }
+  .iconbtn { background:rgba(0,0,0,.55); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:8px;
+             width:36px; height:36px; font-size:16px; line-height:1; cursor:pointer; }
+  .iconbtn:hover { background:rgba(255,255,255,.22); }
+  .iconbtn.danger { color:#f28b82; }
   .hint { position:absolute; left:0; right:0; top:45%; text-align:center; color:#9aa0a6; font-size:15px;
           pointer-events:none; }
   .toast { position:fixed; top:58px; left:50%; transform:translateX(-50%); z-index:60;
@@ -128,6 +133,9 @@ object ClientPage {
     <img id="mjpeg" alt=""/>
     <span class="badge" id="modeBadge"></span>
     <div class="hint" id="stageHint"></div>
+    <div class="topbar" id="topbar">
+      <button class="iconbtn danger" id="btnClose" title="停止虚拟屏会话">✕</button>
+    </div>
   </div>
 </main>
 <div id="toast" class="toast" style="display:none"></div>
@@ -761,6 +769,16 @@ object ClientPage {
       api("/logs/clear", { method: "POST" }).then(function () { refreshLogs(); }).catch(function () {});
     });
     qf("logLevel").addEventListener("change", refreshLogs);
+    // 主界面右上角浮动工具条：关闭 = 停止虚拟屏会话（与 App UI「关闭」行为一致）。
+    qf("btnClose").addEventListener("click", function () {
+      if (!window.confirm("确定停止虚拟屏会话？")) return;
+      api("/debug/session/stop", { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res && res.ok) { showToast("已停止会话"); loadStatus(); }
+          else showToast("停止会话失败");
+        }).catch(function () { showToast("停止会话失败"); });
+    });
 
     var stage = qf("stage");
     stage.addEventListener("pointerdown", function (e) {

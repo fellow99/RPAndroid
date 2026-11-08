@@ -336,8 +336,10 @@ class ManagedServer(
                 post("/debug/session/stop") {
                     val ctl = controller
                     if (ctl is com.managedfloating.core.controller.AppScreenController) {
+                        // 真正停止：释放旧会话帧源/线程 + 清承载 + 清会话引用（同步 App UI）
+                        (ctl.vdSession as? com.managedfloating.core.controller.VdSessionImpl)?.release()
                         ctl.vdSession = null
-                        ctl.clearHosted() // 会话清理时同步清除承载状态（回到图标网格）
+                        ctl.clearHosted()
                     }
                     runCatching { shell?.stopHelper() }
                     MfaLog.w("Server", "session stopped via /debug/session/stop")

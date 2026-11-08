@@ -221,6 +221,10 @@ private fun HostedContent(app: AppInfo) {
     fun close() {
         FloatingService.stop(context)
         PresentationHub.clearHosted()
+        // 停止虚拟屏会话（不只是清空 UI，帧源/助手一并回收）
+        Thread {
+            com.managedfloating.app.ManagedRuntime.stopSession()
+        }.apply { name = "mfa-close"; isDaemon = true }.start()
     }
 
     Column(Modifier.fillMaxSize()) {

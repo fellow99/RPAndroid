@@ -85,7 +85,22 @@ object ManagedRuntime {
                 }
             }.apply { name = "mfa-resume"; isDaemon = true }.start()
         }
+        // 设备横/竖屏监听：虚拟屏跟随设备旋转（仅会话激活时）。
+        startOrientationWatch(context.applicationContext)
     }
+
+    /** 监听设备显示方向，虚拟屏配置与物理方向不一致时触发旋转（重建会话）。 */
+    private fun startOrientationWatch(ctx: Context) {
+        orientationWatcher?.stop()
+        orientationWatcher = OrientationWatcher(ctx) { landscape ->
+            if (controller()?.isSessionActive() == true) {
+                Thread { rotateScreen(landscape) }.apply { name = "mfa-rotate"; isDaemon = true }.start()
+            }
+        }.also { it.start() }
+    }
+
+    @Volatile
+    private var orientationWatcher: OrientationWatcher? = null
 
     private fun currentProcessName(ctx: Context): String? = runCatching {
         if (android.os.Build.VERSION.SDK_INT >= 28) android.app.Application.getProcessName()
@@ -134,7 +149,53 @@ object ManagedRuntime {
                     "Runtime", "session ready port=$connectPort ${width}x$height")
                 synchronized(stateLock) { c.vdSession = session }
                 connectPort?.let { p -> com.managedfloating.core.server.ServerConfig(ctx).connectPort = p }
+                // 新会话与物理横竖屏方向对齐（设备已旋转时立即校正）
+                orientationWatcher?.recheck()
             }
         }
+    }
+
+    /**
+     * 停止当前虚拟屏会话（释放帧源 + 清控制器承载 + 停助手）。供 App UI「关闭」按钮与 /client 关闭使用。
+     */
+    fun stopSession() {
+        com.managedfloating.core.server.MfaLog.i("Runtime", "session stop requested")
+        val c = controllerRef ?: return
+        (c.vdSession as? com.managedfloating.core.controller.VdSessionImpl)?.release()
+        c.vdSession = null
+        c.clearHosted()
+        runCatching { shellRef?.stopHelper() }
+    }
+
+    @Volatile
+    private var lastRotateAt = 0L
+
+    /**
+     * 旋转虚拟屏到目标横/竖方向：交换 vScreen 宽高、重建会话，并重新承载原应用（若有）。
+     * 由 [OrientationWatcher] 在后台线程调用；含去抖。
+     */
+    fun rotateScreen(wantLandscape: Boolean): Boolean {
+        val ctx = appContext ?: return false
+        val c = controllerRef ?: return false
+        val now = System.currentTimeMillis()
+        if (now - lastRotateAt < 1_500) return true // 去抖（传感器/显示抖动）
+        lastRotateAt = now
+        val cfg = com.managedfloating.core.server.ServerConfig(ctx)
+        val w = cfg.vScreenWidth
+        val h = cfg.vScreenHeight
+        val d = cfg.vScreenDpi
+        if (w <= 0 || h <= 0) return false
+        val currentLandscape = w > h
+        if (currentLandscape == wantLandscape) return true
+        val hosted = c.hosted()
+        com.managedfloating.core.server.MfaLog.i("Runtime", "rotate ${w}x$h -> ${h}x$w landscape=$wantLandscape")
+        cfg.vScreenWidth = h
+        cfg.vScreenHeight = w
+        val ok = startSession(cfg.connectPort, h, w, d)
+        if (ok && hosted != null) {
+            val r = c.launch(hosted.packageName, null)
+            com.managedfloating.core.server.MfaLog.i("Runtime", "rotate relaunch ${hosted.packageName} ok=${r.ok}")
+        }
+        return ok
     }
 }
