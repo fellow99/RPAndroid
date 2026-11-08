@@ -166,3 +166,17 @@
 - `core:server`：`ServerConfig`（新增分辨率字段）。
 - `core:script`：`TaskStore`/`ScriptTask`/`TaskScheduler`（复用）。
 - 真机：联调验证（仅本机使用，不留存真实地址）。
+
+## 9. 已知问题（备案，2026-11-08 真机实测）
+
+### 9.1 浮窗呈现：被承载 App 为「设置」时浮窗不可见
+- **现象**：承载「设置」(`com.android.settings`) 后点「浮窗」，浮窗窗口未显示（系统 `mForceHideNonSystemOverlayWindow=true`、`isVisible=false`、`isOnScreen=false`）。
+- **同会话 A/B 实测**（Redmi M2105K81C / Android13 / MIUI）：
+  - 承载「时钟」等其它应用 → 浮窗**正常可见**（`isOnScreen=true`）。
+  - 承载「设置」→ 浮窗被系统策略隐藏。
+- **已排除的因素**：
+  - 非 `PUBLIC/PRIVATE` 标志问题（虚拟屏已改为 `PRIVATE` 后仍复现）。
+  - 非“存在虚拟屏即隐藏”问题（其它应用承载时浮窗可见）。
+- **理解**：被承载的「设置」属系统设置界面，激活该界面时该 ROM 的 WindowManager 置全局“隐藏非系统悬浮窗”策略（`mForceHideNonSystemOverlayWindow`），与前面投屏保护同一机制。
+- **影响范围**：仅「设置」作为被承载对象时影响浮窗模式；嵌入 / 全屏 / 自动恢复均不受影响。
+- **处理**：备案，暂不修复。后续可选方案：改用自由窗口（Freeform/小窗 Activity）承载以绕开 `SYSTEM_ALERT_WINDOW` 策略，或针对该 ROM 策略定制。
