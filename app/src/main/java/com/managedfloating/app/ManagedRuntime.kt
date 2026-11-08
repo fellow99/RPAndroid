@@ -85,6 +85,8 @@ object ManagedRuntime {
         val c = controllerRef ?: return false
         val sh = shellRef ?: return false
         val ctx = appContext ?: return false
+        // 释放旧会话持有的帧源/线程（新会话接管前）
+        (c.vdSession as? com.managedfloating.core.controller.VdSessionImpl)?.release()
         runCatching { sh.stopHelper() }
         // 清理可能残留的旧助手（adbd 会话进程组未必随 App 结束而回收）
         runCatching {

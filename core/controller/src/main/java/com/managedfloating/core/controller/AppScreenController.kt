@@ -80,6 +80,8 @@ class AppScreenController(private val context: Context) : ScreenController {
 
     override fun readUi(): String? = runCatching { uiReader?.invoke() }.getOrNull()
 
+    override fun frameSource(): FrameSource? = vdSession?.frameSource()
+
     override fun isSessionActive(): Boolean = vdSession != null
 
     /** 会话通道目录（供嵌入的助手高效使用）。 */
@@ -102,4 +104,6 @@ interface VdSession {
     fun tap(x: Int, y: Int): Boolean
     fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durMs: Int): Boolean
     fun pressKey(keyCode: Int): Boolean
+    /** App 进程侧的共享帧源；无会话/未就绪返回 null。 */
+    fun frameSource(): FrameSource?
 }

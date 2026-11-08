@@ -7,8 +7,11 @@ import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.os.Looper
+import android.os.Parcel
+import android.view.Surface
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.ByteOrder
 
 /**
  * [VdHelper] —— 以 shell UID(app_process) 运行的虚拟屏助手（打进 App 的 dex，用 App 的 base.apk 作 CLASSPATH 加载）。
@@ -47,6 +50,9 @@ object VdHelper {
         val w = args.getOrElse(1) { "720" }.toInt()
         val h = args.getOrElse(2) { "1560" }.toInt()
         val dpi = args.getOrElse(3) { "400" }.toInt()
+        // 007-webrtc：可选 `--surface-sock <name>` —— 从该抽象 socket 读取 App 进程的 Surface 建虚拟屏，
+        // 帧直接落在 App 进程（FrameHub）。未提供/交接失败时回退旧路径：自持 ImageReader + 文件 IPC。
+        val surfaceSock = if (args.size > 4 && args[4] == "--surface-sock") args.getOrNull(5) else null
 
         ipcDir.mkdirs()
         val cmd = File(ipcDir, "cmd.txt")
@@ -66,14 +72,21 @@ object VdHelper {
             if (sdk >= 34) flags = flags or FLAG_OWN_FOCUS or FLAG_STEAL_TOP_FOCUS_DISABLED
         }
 
-        val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
+        val appSurface: Surface? = try {
+            if (surfaceSock != null) readSurface(surfaceSock) else null
+        } catch (t: Throwable) {
+            println("MFA_HELPER_SURFACE_FALLBACK ${t.message}")
+            null
+        }
+        val reader: ImageReader? = if (appSurface == null) ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2) else null
         val dm = newDisplayManager()
+        val vdSurface = appSurface ?: reader!!.surface
         val vd: VirtualDisplay = try {
-            dm.createVirtualDisplay("mfa-agent", w, h, dpi, reader.surface, flags)
+            dm.createVirtualDisplay("mfa-agent", w, h, dpi, vdSurface, flags)
         } catch (e: SecurityException) {
             val f2 = FLAG_OWN_CONTENT_ONLY or FLAG_SUPPORTS_TOUCH or
                 FLAG_ROTATES_WITH_CONTENT or FLAG_DESTROY_CONTENT_ON_REMOVAL or FLAG_TOUCH_FEEDBACK_DISABLED
-            dm.createVirtualDisplay("mfa-agent", w, h, dpi, reader.surface, f2)
+            dm.createVirtualDisplay("mfa-agent", w, h, dpi, vdSurface, f2)
         }
         val displayId = vd.display.displayId
         ready.writeText(displayId.toString())
@@ -95,7 +108,10 @@ object VdHelper {
                     val payload = try {
                         when (op) {
                             "launch" -> { exec("am start --display $displayId -n ${a[0]}"); "ok" }
-                            "frame" -> { captureFrame(reader, a[0]); a[0] }
+                            "frame" -> {
+                                // 交接模式（appSurface 非空）帧由 App 进程 FrameHub 自己取；旧路径仍由助手截帧写文件。
+                                if (reader != null) { captureFrame(reader, a[0]); a[0] } else a[0]
+                            }
                             "tap" -> { exec("input -d $displayId tap ${a[0]} ${a[1]}"); "ok" }
                             "swipe" -> { exec("input -d $displayId swipe ${a[0]} ${a[1]} ${a[2]} ${a[3]} ${a.getOrElse(4) { "300" }}"); "ok" }
                             "key" -> { exec("input -d $displayId keyevent ${a[0]}"); "ok" }
@@ -114,6 +130,42 @@ object VdHelper {
                 }
             }
             Thread.sleep(80)
+        }
+    }
+
+    /** 从抽象 socket 读取 App 进程交来的 Surface（4 字节小端长度前缀 + Parcel 字节）。 */
+    private fun readSurface(name: String): Surface {
+        val sock = android.net.LocalSocket()
+        try {
+            sock.connect(android.net.LocalSocketAddress(name, android.net.LocalSocketAddress.Namespace.ABSTRACT))
+            sock.soTimeout = 15_000
+            val input = sock.inputStream
+            val head = ByteArray(4)
+            readFully(input, head)
+            val len = java.nio.ByteBuffer.wrap(head).order(ByteOrder.LITTLE_ENDIAN).int
+            if (len <= 0 || len > 4 * 1024 * 1024) throw IllegalStateException("bad surface parcel length $len")
+            val blob = ByteArray(len)
+            readFully(input, blob)
+            val p = Parcel.obtain()
+            try {
+                p.unmarshall(blob, 0, blob.size)
+                p.setDataPosition(0)
+                return p.readParcelable<Surface>(Surface::class.java.classLoader)
+                    ?: throw IllegalStateException("null surface from parcel")
+            } finally {
+                p.recycle()
+            }
+        } finally {
+            runCatching { sock.close() }
+        }
+    }
+
+    private fun readFully(input: java.io.InputStream, buf: ByteArray) {
+        var off = 0
+        while (off < buf.size) {
+            val r = input.read(buf, off, buf.size - off)
+            if (r < 0) throw java.io.IOException("socket eof")
+            off += r
         }
     }
 

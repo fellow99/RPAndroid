@@ -32,6 +32,9 @@ interface ScreenController {
     /** 读取被托管 App 界面元素（JSON 数组字符串）；不可用时 null。 */
     fun readUi(): String?
 
+    /** 共享帧源（App 进程捕捉到的虚拟屏画面），供视频推流/预览；无会话返回 null。 */
+    fun frameSource(): FrameSource?
+
     /** 当前是否已有可用的承载会话（虚拟屏 + 助手）。 */
     fun isSessionActive(): Boolean
 }
