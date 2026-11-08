@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -33,6 +34,7 @@ android {
 
     buildFeatures {
         aidl = true
+        compose = true
     }
 }
 
@@ -47,4 +49,13 @@ dependencies {
     runtimeOnly(libs.node.runtime)
 
     implementation(libs.androidx.core.ktx)
+
+    // Compose UI（101-main-ui 里程碑启用）
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.graphics)
+    implementation(libs.compose.material3)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.compose.ui.tooling.preview)
+    debugImplementation(libs.compose.ui.tooling)
 }
