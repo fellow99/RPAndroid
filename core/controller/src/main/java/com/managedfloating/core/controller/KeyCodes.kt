@@ -17,7 +17,6 @@ object KeyCodes {
         "paste" to 279,
         "copy" to 278,
         "cut" to 277,
-        "select_all" to 29,
         "tab" to 61,
         "esc" to 111,
         "escape" to 111,

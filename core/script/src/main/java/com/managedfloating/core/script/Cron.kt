@@ -11,8 +11,9 @@ object Cron {
 
     fun next(cron: String, fromMs: Long): Long? {
         val f = cron.trim().split(Regex("\\s+"))
-        // 6 字段 = 带秒；其余按 5 字段处理（与历史行为一致）。
-        val hasSeconds = f.size >= 6
+        // 只接受 5 字段（分 时 日 月 周）或 6 字段（秒 分 时 日 月 周）。
+        if (f.size != 5 && f.size != 6) return null
+        val hasSeconds = f.size == 6
         val off = if (hasSeconds) 1 else 0
         if (f.size < 5 + off) return null
         val seconds = if (hasSeconds) parse(f[0], 0, 59) ?: return null else null

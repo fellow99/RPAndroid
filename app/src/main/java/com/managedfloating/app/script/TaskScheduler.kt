@@ -63,7 +63,12 @@ class TaskScheduler(private val ctx: Context) {
         if (TaskRuntime.begin(taskId)) {
             store.upsert(t.copy(lastRunAt = now, runCount = t.runCount + 1))
             ScriptService.clearStopFlag(ctx, taskId)
-            ScriptService.runTask(ctx, taskId)
+            // 后台启前台服务在部分 ROM 可能抛 ForegroundServiceStartNotAllowedException；
+            // BroadcastReceiver 里不能让异常逸出，否则会直接崩进程。
+            runCatching { ScriptService.runTask(ctx, taskId) }.onFailure {
+                com.managedfloating.core.server.MfaLog.e("Script", "scheduled run start failed: ${it.message}")
+                TaskRuntime.end(taskId)
+            }
         } else {
             com.managedfloating.core.server.MfaLog.w("Script", "scheduled run skipped (busy) task=$taskId")
         }

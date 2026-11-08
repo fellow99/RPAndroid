@@ -64,10 +64,11 @@
             android:name=".script.AlarmReceiver"
             android:exported="false" />
 
-        <!-- 重启后恢复：拉起服务器/会话自动恢复并重排 cron/interval 闹钟（否则重启后定时任务丢失）。 -->
+        <!-- 重启后恢复：拉起服务器/会话自动恢复并重排 cron/interval 闹钟（否则重启后定时任务丢失）。
+             系统广播（BOOT_COMPLETED / MY_PACKAGE_REPLACED）不要求 exported=true，保持 false 减小攻击面。 -->
         <receiver
             android:name=".script.BootReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />

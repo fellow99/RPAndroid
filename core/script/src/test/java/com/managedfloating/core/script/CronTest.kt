@@ -120,6 +120,11 @@ class CronTest {
     }
 
     @Test
+    fun `more than six fields returns null`() {
+        assertNull(Cron.next("0 0 * * * * *", cal(2026, 11, 7, 0, 0)))
+    }
+
+    @Test
     fun `five fields still minute granularity`() {
         val from = cal(2026, 11, 7, 12, 30) + 15_000
         val next = Cron.next("* * * * *", from)!!
