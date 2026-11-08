@@ -24,4 +24,4 @@ GET /stream → 200, Content-Type: multipart/x-mixed-replace; boundary=frame
 ```
 
 ## 接入文档
-`specs/004-server/integration.md`（REST/MCP/MJPEG + adb forward/reverse + token）。
+`docs/API.md`、`docs/MCP.md`、`docs/MJPEG.md`（REST/MCP/MJPEG + adb forward + token）。
