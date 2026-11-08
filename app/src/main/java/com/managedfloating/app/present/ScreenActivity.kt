@@ -10,19 +10,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.managedfloating.app.ui.EmbeddedScreen
 import com.managedfloating.app.ui.PresentationHub
 import com.managedfloating.app.ui.PresentationMode
@@ -90,30 +92,35 @@ class ScreenActivity : ComponentActivity() {
     }
 }
 
-/** 全屏呈现：画帧 + 右上角悬浮控制 + 返回键转发。 */
+/** 全屏呈现：画帧 + 右上角圆形小图标控制（嵌入/浮窗/关闭）+ 返回键转发。 */
 @Composable
 private fun FullscreenPresentation(controller: ScreenController, onAction: (String) -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         EmbeddedScreen(controller, Modifier.fillMaxSize())
-        Row(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
-            ControlChip("嵌入") { onAction("embed") }
-            ControlChip("浮窗") { onAction("floating") }
-            ControlChip("关闭") { onAction("close") }
+        Row(
+            Modifier.align(Alignment.TopEnd).padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CircleIconButton(icon = "⊞", onClick = { onAction("embed") })     // 嵌入
+            CircleIconButton(icon = "▣", onClick = { onAction("floating") })  // 浮窗
+            CircleIconButton(icon = "✕", onClick = { onAction("close") })     // 关闭
         }
         // 返回键转发给被托管 App（不退出全屏）
         BackHandler { Thread { runCatching { controller.back() } }.start() }
     }
 }
 
+/** 圆形小图标按钮：直径约 1.5em，半透明深色底 + 白色图标。 */
 @Composable
-private fun ControlChip(label: String, onClick: () -> Unit) {
+private fun CircleIconButton(icon: String, onClick: () -> Unit) {
     Surface(
+        onClick = onClick,
+        shape = CircleShape,
         color = Color(0x99000000),
-        shape = MaterialTheme.shapes.small,
-        modifier = Modifier.padding(4.dp),
+        modifier = Modifier.size(24.dp),
     ) {
-        TextButton(onClick = onClick) {
-            Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge)
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(icon, color = Color.White, fontSize = 15.sp)
         }
     }
 }

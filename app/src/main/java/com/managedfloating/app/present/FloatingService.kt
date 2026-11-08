@@ -13,6 +13,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
@@ -41,14 +42,46 @@ class FloatingService : Service() {
         val container = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#CC000000")) }
         val iv = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
         container.addView(iv, FrameLayout.LayoutParams(-1, -1))
-        val close = TextView(this).apply {
-            text = "✕"
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            setPadding(16, 4, 16, 8)
-            setOnClickListener { stopSelf() }
+        // 右上角：三个圆形小图标按钮（嵌入 / 浮窗 / 关闭），直径约 1.5em
+        val d = resources.displayMetrics.density
+        val btnSize = (24 * d).toInt()
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding((8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt(), (8 * d).toInt())
         }
-        container.addView(close, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END))
+        fun circleButton(glyph: String, desc: String, onClick: () -> Unit): TextView {
+            val tv = TextView(this).apply {
+                text = glyph
+                contentDescription = desc
+                setTextColor(Color.WHITE)
+                textSize = 11f
+                gravity = Gravity.CENTER
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(Color.parseColor("#99000000"))
+                }
+                setOnClickListener { onClick() }
+            }
+            tv.layoutParams = LinearLayout.LayoutParams(btnSize, btnSize).apply {
+                marginStart = (6 * d).toInt()
+            }
+            return tv
+        }
+        controls.addView(circleButton("⊞", "嵌入", {
+            stopSelf()
+            com.managedfloating.app.ui.PresentationHub.setMode(com.managedfloating.app.ui.PresentationMode.EMBEDDED)
+        }))
+        controls.addView(circleButton("▣", "浮窗", { /* 已在浮窗 */ }))
+        controls.addView(circleButton("✕", "关闭", {
+            stopSelf()
+            com.managedfloating.app.ui.PresentationHub.clearHosted()
+        }))
+        container.addView(controls, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.END,
+        ))
         root = container
         imageView = iv
 
