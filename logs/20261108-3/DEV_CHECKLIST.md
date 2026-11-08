@@ -31,7 +31,8 @@
 - [x] 产物清理（测试任务已删；只留用户原 t1/t2）
 
 ## T4 文档/评审/回归
-- [ ] docs/Client.md
-- [ ] docs/API.md 端点表补充
-- [ ] code review（requesting/receiving）
-- [ ] 回归 + 安全复核（不落真实 IP/token/凭据）
+- [x] docs/Client.md（新）
+- [x] docs/API.md 端点表补充（/client、/apps/{pkg}/icon、/action/key、/tasks/{id}/stop、/health.authEnabled、/status.runningTaskId）
+- [x] code review（requesting/receiving）→ REVIEW_REPORT.md（无 Critical，2 Important+1 Minor 已修）＋ code-review-fix 提交
+- [x] 回归：REST/MJPEG/WebRTC/页面全量抽验；安全复核——无真实 IP/token/凭据入库，存量 192.168.0.100 已 redact 为 <host>
+- [x] 提交：docs(client)/test(client)/chore(security) 等（git log 见下）
