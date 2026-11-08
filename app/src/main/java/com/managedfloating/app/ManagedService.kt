@@ -46,6 +46,28 @@ class ManagedService : Service() {
             }
             return arr.toString()
         }
+
+        override fun key(code: Int): Boolean = ctl()?.pressKey(code) ?: false
+
+        override fun text(text: String?): Boolean = if (text == null) false else ctl()?.text(text) ?: false
+
+        override fun info(): String {
+            val c = ctl() as? com.managedfloating.core.controller.AppScreenController
+            val cfg = com.managedfloating.core.server.ServerConfig(applicationContext)
+            return org.json.JSONObject().apply {
+                put("ok", c?.isSessionActive() == true)
+                put("sessionActive", c?.isSessionActive() == true)
+                put("w", cfg.vScreenWidth)
+                put("h", cfg.vScreenHeight)
+                put("dpi", cfg.vScreenDpi)
+                put("hosted", c?.hosted()?.packageName ?: org.json.JSONObject.NULL)
+                put("runningTaskId", com.managedfloating.app.script.TaskRuntime.runningTaskId ?: org.json.JSONObject.NULL)
+            }.toString()
+        }
+
+        override fun log(tag: String?, msg: String?) {
+            com.managedfloating.core.server.MfaLog.i(tag ?: "Script", msg ?: "")
+        }
     }
 
     companion object {

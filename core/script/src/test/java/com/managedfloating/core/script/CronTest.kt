@@ -88,4 +88,43 @@ class CronTest {
         assertEquals(9, c.get(Calendar.HOUR_OF_DAY))
         assertEquals(0, c.get(Calendar.MINUTE))
     }
+
+    @Test
+    fun `six fields with seconds fires on next minute at second 0`() {
+        val from = cal(2026, 11, 7, 12, 30) + 15_000 // 12:30:15
+        val next = Cron.next("0 * * * * *", from)!!
+        val c = Calendar.getInstance().apply { timeInMillis = next }
+        assertEquals(12, c.get(Calendar.HOUR_OF_DAY))
+        assertEquals(31, c.get(Calendar.MINUTE))
+        assertEquals(0, c.get(Calendar.SECOND))
+    }
+
+    @Test
+    fun `six fields can match later second in same minute`() {
+        val from = cal(2026, 11, 7, 12, 30) + 15_000 // 12:30:15
+        val next = Cron.next("30 * * * * *", from)!!
+        val c = Calendar.getInstance().apply { timeInMillis = next }
+        assertEquals(12, c.get(Calendar.HOUR_OF_DAY))
+        assertEquals(30, c.get(Calendar.MINUTE))
+        assertEquals(30, c.get(Calendar.SECOND))
+    }
+
+    @Test
+    fun `six fields result is strictly after from`() {
+        val from = cal(2026, 11, 7, 12, 30) + 30_000 // 12:30:30\.000
+        val next = Cron.next("30 * * * * *", from)!!
+        assertTrue(next > from)
+        val c = Calendar.getInstance().apply { timeInMillis = next }
+        assertEquals(31, c.get(Calendar.MINUTE))
+        assertEquals(30, c.get(Calendar.SECOND))
+    }
+
+    @Test
+    fun `five fields still minute granularity`() {
+        val from = cal(2026, 11, 7, 12, 30) + 15_000
+        val next = Cron.next("* * * * *", from)!!
+        val c = Calendar.getInstance().apply { timeInMillis = next }
+        assertEquals(31, c.get(Calendar.MINUTE))
+        assertEquals(0, c.get(Calendar.SECOND))
+    }
 }

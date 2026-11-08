@@ -74,6 +74,10 @@ object ManagedRuntime {
             server = s
             s.start()
         }
+        // 应用进程启动后重排定时任务（覆盖安装/进程被杀后 AlarmManager 闹钟会丢失）。
+        runCatching {
+            com.managedfloating.app.script.TaskScheduler(context.applicationContext).rescheduleAll()
+        }
         // 自动恢复上次会话（后台线程，不阻塞 onCreate）——使用设置中的虚拟屏分辨率
         val cfg = ServerConfig(context.applicationContext)
         val savedPort = cfg.connectPort

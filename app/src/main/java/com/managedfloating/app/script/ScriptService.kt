@@ -110,8 +110,12 @@ class ScriptService : Service() {
         rt.host.register("script.done") { payload ->
             val o = JSONObject(payload)
             val id = o.optString("taskId")
-            results[id] = RunResult(o.optBoolean("ok"), o.optString("error").takeIf { it.isNotEmpty() })
+            val ok = o.optBoolean("ok")
+            val err = o.optString("error").takeIf { it.isNotEmpty() }
+            results[id] = RunResult(ok, err)
             pendingDone.remove(id)?.countDown()
+            // 回传主进程统一日志（:node 进程的 MfaLog 独立，不聚合到 /logs）
+            control?.log("Script", "run done task=$id ok=$ok${if (err != null) " err=$err" else ""}")
             """{"ok":true}"""
         }
         rt.host.register("screen.tap") { p ->
@@ -139,7 +143,27 @@ class ScriptService : Service() {
             val json = control?.listAppsJson() ?: "[]"
             """{"ok":true,"apps":$json}"""
         }
-        rt.host.register("log") { p -> com.managedfloating.core.server.MfaLog.i("Script", p); """{"ok":true}""" }
+        // 按键注入：`{code}` 优先，否则按名称查表（与 MCP screen_key 一致）。
+        rt.host.register("screen.key") { p ->
+            val o = JSONObject(p)
+            val code = if (o.has("code")) o.optInt("code")
+            else com.managedfloating.core.controller.KeyCodes.byName(o.optString("name"))
+            val ok = if (code > 0) control?.key(code) ?: false else false
+            """{"ok":$ok,"code":$code}"""
+        }
+        // 文本注入：中文走剪贴板+粘贴（主进程实现）。
+        rt.host.register("screen.text") { p ->
+            val o = JSONObject(p)
+            val ok = control?.text(o.optString("text")) ?: false
+            """{"ok":$ok}"""
+        }
+        // 屏幕/会话信息：脚本按真实分辨率算坐标，不再写死。
+        rt.host.register("screen.info") { _ -> control?.info() ?: """{"ok":false}""" }
+        rt.host.register("log") { p ->
+            // 关键：转发到主进程日志缓冲，REST /logs 与 MCP logs 可见（tag=Script）
+            control?.log("Script", p)
+            """{"ok":true}"""
+        }
     }
 
     /** 阻塞等待某任务执行完成（供 REST/调度取结果）。 */
@@ -166,7 +190,13 @@ class ScriptService : Service() {
     }
 
     private fun notifyState(s: String) {
-        com.managedfloating.core.server.MfaLog.i("Script", s)
+        // 优先回传主进程（/logs 可见）；未绑定成功时退回本进程日志
+        val c = control
+        if (c != null) runCatching { c.log("Script", s) }.onFailure {
+            com.managedfloating.core.server.MfaLog.i("Script", s)
+        } else {
+            com.managedfloating.core.server.MfaLog.i("Script", s)
+        }
     }
 
     companion object {
@@ -192,6 +222,16 @@ class ScriptService : Service() {
                 f.parentFile?.mkdirs()
                 f.writeText("stop")
             }
+        }
+
+        /**
+         * 清除遗留的停止信号。
+         *
+         * 必须在每次新执行开始前调用：`task_stop` 在任务未运行时也会写停止信号，若不清除，
+         * 下一次执行会在第一个 `host.invoke` 处被误判为“已取消”（真机实测）。
+         */
+        fun clearStopFlag(ctx: Context, taskId: String) {
+            runCatching { stopFlagFile(ctx, taskId).delete() }
         }
 
         /** 读取 :node runner 报告的某任务执行结果（有则消费并删除）。 */

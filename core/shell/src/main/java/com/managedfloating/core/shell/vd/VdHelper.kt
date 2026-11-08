@@ -117,6 +117,17 @@ object VdHelper {
                             "tap" -> { exec("input -d $displayId tap ${a[0]} ${a[1]}"); "ok" }
                             "swipe" -> { exec("input -d $displayId swipe ${a[0]} ${a[1]} ${a[2]} ${a[3]} ${a.getOrElse(4) { "300" }}"); "ok" }
                             "key" -> { exec("input -d $displayId keyevent ${a[0]}"); "ok" }
+                            // 文本注入：参数为 UTF-8 文本的 Base64（避免文件 IPC 的 `|` 分隔符与换行冲突）。
+                            // 仅适用于 ASCII（系统 `input text` 限制）；中文由主进程走剪贴板+粘贴。
+                            "text" -> {
+                                val raw = String(
+                                    android.util.Base64.decode(a[0], android.util.Base64.NO_WRAP),
+                                    Charsets.UTF_8,
+                                )
+                                val escaped = raw.replace("'", "'\\''")
+                                exec("input -d $displayId text '$escaped'")
+                                "ok"
+                            }
                             "quit" -> { result.writeText("$seq|ok|bye"); break }
                             else -> { result.writeText("$seq|err|unknown op $op"); lastSeq = seq; cmd.delete(); continue }
                         }

@@ -66,10 +66,28 @@ class TaskApiImpl(private val ctx: Context) : TaskApi {
     }
 
     override fun stop(id: String): Boolean = runCatching {
-        TaskRuntime.end(id)
+        val wasRunning = TaskRuntime.runningTaskId == id
         scheduler.stop(id)
+        // 停止是“尽力而为 + 立即反馈”：这里会立即释放运行态，watchdog 之后拿不到本次结果，
+        // 所以直接写回取消状态，避免 UI/接口仍显示上一次的 ok。
+        if (wasRunning) {
+            store.get(id)?.let { store.upsert(it.copy(lastStatus = "cancelled")) }
+        }
+        TaskRuntime.end(id)
         true
     }.getOrDefault(false)
+
+    override fun getJson(id: String): String? = runCatching { store.get(id)?.toJson() }.getOrNull()
+
+    override fun waitRun(id: String, timeoutMs: Long): Boolean {
+        if (timeoutMs <= 0) return TaskRuntime.runningTaskId != id
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (TaskRuntime.runningTaskId != id) return true
+            Thread.sleep(100)
+        }
+        return TaskRuntime.runningTaskId != id
+    }
 
     init {
         TaskRuntime.attach(ctx.applicationContext)

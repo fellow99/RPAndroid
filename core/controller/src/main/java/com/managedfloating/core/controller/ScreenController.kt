@@ -29,6 +29,14 @@ interface ScreenController {
     /** 在被托管屏上注入任意 keyevent（keycode）。 */
     fun pressKey(keyCode: Int): Boolean
 
+    /**
+     * 向被托管屏当前焦点输入框写入文本（支持中文等非 ASCII）。
+     *
+     * 实现策略：ASCII 走系统 `input text`；非 ASCII 走“系统剪贴板 + 粘贴键（KEYCODE_PASTE）”。
+     * 返回是否已成功下发（不等同于目标 App 一定插入成功）。
+     */
+    fun text(text: String): Boolean
+
     /** 读取被托管 App 界面元素（JSON 数组字符串）；不可用时 null。 */
     fun readUi(): String?
 

@@ -43,7 +43,7 @@ class ManagedServer(
 ) {
 
     private val mapper = jacksonObjectMapper()
-    private val mcp = McpServer(controller, taskApi)
+    private val mcp = McpServer(controller, taskApi, statusProvider)
     private val sessions = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.channels.Channel<String>>()
     private val streamClients = java.util.concurrent.atomic.AtomicInteger(0)
 
@@ -194,6 +194,14 @@ class ManagedServer(
                     val b = mapper.readValue<KeyReq>(call.receive<String>())
                     val ok = withContext(Dispatchers.IO) { controller.pressKey(b.code) }
                     if (!ok) MfaLog.w("Server", "key failed code=${b.code} - session inactive?")
+                    call.respond(mapOf("ok" to ok))
+                }
+
+                // 文本输入（与 MCP screen_text 对齐；ASCII 走 input text，非 ASCII 走剪贴板+粘贴）。
+                post("/action/text") {
+                    val b = mapper.readValue<TextReq>(call.receive<String>())
+                    val ok = withContext(Dispatchers.IO) { controller.text(b.text) }
+                    if (!ok) MfaLog.w("Server", "text inject failed len=${b.text.length} - session inactive?")
                     call.respond(mapOf("ok" to ok))
                 }
 
@@ -441,6 +449,7 @@ class ManagedServer(
     data class TapReq(val x: Int, val y: Int)
     data class SwipeReq(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val durMs: Int? = null)
     data class KeyReq(val code: Int)
+    data class TextReq(val text: String)
     data class PairReq(
         val host: String,
         val pairPort: Int,

@@ -118,6 +118,37 @@ class AppScreenController(private val context: Context) : ScreenController {
         return try { s.pressKey(keyCode) } catch (e: Exception) { false }
     }
 
+    /**
+     * 文本注入：
+     * - ASCII：交给助手执行 `input -d <display> text`（可靠、无剪贴板副作用）；
+     * - 非 ASCII（中文等）：写系统剪贴板 + 注入 KEYCODE_PASTE（
+     *   虚拟屏上的无障碍 ACTION_SET_TEXT 在部分 ROM 不可用，故走粘贴）。
+     */
+    override fun text(text: String): Boolean {
+        if (text.isEmpty()) return true
+        val s = vdSession ?: return false
+        return try {
+            if (text.all { it.code in 0x20..0x7E }) {
+                s.text(text)
+            } else {
+                pasteViaClipboard(text) && s.pressKey(android.view.KeyEvent.KEYCODE_PASTE)
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("MFA/Controller", "text inject failed: ${e.message}")
+            false
+        }
+    }
+
+    /** 把文本写入系统剪贴板（供粘贴键消费）；不记日志正文，避免敏感信息落盘。 */
+    private fun pasteViaClipboard(text: String): Boolean = try {
+        val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("mfa", text))
+        true
+    } catch (e: Exception) {
+        android.util.Log.w("MFA/Controller", "clipboard write failed: ${e.message}")
+        false
+    }
+
     override fun readUi(): String? = runCatching { uiReader?.invoke() }.getOrNull()
 
     override fun frameSource(): FrameSource? = vdSession?.frameSource()
@@ -144,6 +175,8 @@ interface VdSession {
     fun tap(x: Int, y: Int): Boolean
     fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durMs: Int): Boolean
     fun pressKey(keyCode: Int): Boolean
+    /** 注入文本（仅 ASCII；中文由 [AppScreenController.text] 走剪贴板）。 */
+    fun text(text: String): Boolean
     /** 关闭虚拟屏上的 [packageName] 应用（保留会话；用于“返回应用列表”）。 */
     fun closeApp(packageName: String): Boolean
     /** App 进程侧的共享帧源；无会话/未就绪返回 null。 */

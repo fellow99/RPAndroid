@@ -33,16 +33,41 @@ class TaskScheduler(private val ctx: Context) {
     }
 
     fun runNow(taskId: String) {
+        ScriptService.clearStopFlag(ctx, taskId)
         ScriptService.runTask(ctx, taskId)
         val t = store.get(taskId) ?: return
         val now = System.currentTimeMillis()
-        val next = when (t.kind) {
-            ScheduleKind.INTERVAL -> if (t.intervalMs > 0) now + t.intervalMs else 0L
-            ScheduleKind.CRON -> Cron.next(t.cron, now) ?: 0L
-            ScheduleKind.IMMEDIATE -> 0L
+        val next = when {
+            !t.enabled -> 0L // 停用任务手动执行一次，不排后续闹钟
+            t.kind == ScheduleKind.INTERVAL -> if (t.intervalMs > 0) now + t.intervalMs else 0L
+            t.kind == ScheduleKind.CRON -> Cron.next(t.cron, now) ?: 0L
+            else -> 0L
         }
         store.upsert(t.copy(lastRunAt = now, runCount = t.runCount + 1, nextRunAt = next))
-        if (next > 0) scheduleAt(t.copy(nextRunAt = next), next)
+        if (next > 0) scheduleAt(store.get(taskId) ?: t, next)
+    }
+
+    /**
+     * 闹钟到点：记录运行统计 → 占用全局执行权（互斥）→ 交给 :node 执行 → 续排下一次。
+     *
+     * 修复：历史实现（AlarmReceiver 直接 runTask）不经 TaskRuntime/runNow，导致定时触发时
+     * `runCount/lastRunAt` 不增长、`runningTaskId` 不可观、`lastStatus` 不回写。
+     */
+    fun onAlarm(taskId: String) {
+        val t = store.get(taskId) ?: return
+        if (!t.enabled) {
+            cancel(taskId)
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (TaskRuntime.begin(taskId)) {
+            store.upsert(t.copy(lastRunAt = now, runCount = t.runCount + 1))
+            ScriptService.clearStopFlag(ctx, taskId)
+            ScriptService.runTask(ctx, taskId)
+        } else {
+            com.managedfloating.core.server.MfaLog.w("Script", "scheduled run skipped (busy) task=$taskId")
+        }
+        rescheduleAll()
     }
 
     /** 停止某任务：取消已排闹钟 + 写停止信号中止 :node 当前执行（尽力而为）。 */
@@ -62,11 +87,15 @@ class TaskScheduler(private val ctx: Context) {
         } catch (e: SecurityException) {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, atMs, pi)
         }
-        store.upsert(task.copy(nextRunAt = atMs))
+        // 只回写 nextRunAt：不能用调用方手里的旧副本整条覆盖，否则会抹掉刚写入的
+        // lastRunAt / runCount / lastStatus（实测 runCount 恒为 0 的根因）。
+        store.get(task.id)?.let { store.upsert(it.copy(nextRunAt = atMs)) }
     }
 
     private fun cancel(taskId: String) {
-        am.cancel(pendingIntent(taskId, PendingIntent.FLAG_NO_CREATE) ?: return)
+        pendingIntent(taskId, PendingIntent.FLAG_NO_CREATE)?.let { am.cancel(it) }
+        // 取消后清掉下次计划时间（即使闹钟已不存在），避免 UI/接口展示一个不会触发的时刻。
+        store.get(taskId)?.let { if (it.nextRunAt != 0L) store.upsert(it.copy(nextRunAt = 0)) }
     }
 
     private fun pendingIntent(taskId: String, flags: Int): PendingIntent? {
@@ -78,12 +107,10 @@ class TaskScheduler(private val ctx: Context) {
     }
 }
 
-/** 闹钟到点 → 触发 :node 进程执行任务。 */
+/** 闹钟到点 → 经 [TaskScheduler.onAlarm] 记录统计、占用执行权并触发 :node 执行。 */
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val taskId = intent.getStringExtra(ScriptService.EXTRA_TASK_ID) ?: return
-        ScriptService.runTask(context.applicationContext, taskId)
-        // 续排下一次
-        TaskScheduler(context.applicationContext).rescheduleAll()
+        TaskScheduler(context.applicationContext).onAlarm(taskId)
     }
 }

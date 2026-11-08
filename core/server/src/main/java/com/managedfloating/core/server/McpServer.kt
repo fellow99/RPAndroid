@@ -1,5 +1,6 @@
 package com.managedfloating.core.server
 
+import com.managedfloating.core.controller.KeyCodes
 import com.managedfloating.core.controller.ScreenController
 import org.json.JSONArray
 import org.json.JSONObject
@@ -17,6 +18,8 @@ import android.util.Base64
 class McpServer(
     private val controller: ScreenController,
     private val taskApi: TaskApi? = null,
+    /** 额外状态提供者（会话/承载/分辨率/运行中任务等），与 REST /status 共用。 */
+    private val statusProvider: (() -> Map<String, Any?>)? = null,
 ) {
 
     companion object {
@@ -99,6 +102,26 @@ class McpServer(
             listOf("x1", "y1", "x2", "y2"),
         )
         tool(
+            "screen_key", "Inject a key event (back/home/enter/del/paste/tab/esc/... or raw keycode)",
+            JSONObject()
+                .put("code", prop("integer", "KeyEvent keycode, e.g. 4=BACK; takes precedence"))
+                .put("name", prop("string", "key name: " + KeyCodes.names().joinToString("/"))),
+            emptyList(),
+        )
+        tool(
+            "screen_text", "Type text into the focused input on the virtual screen (supports Chinese; ASCII uses input text, non-ASCII uses clipboard+paste)",
+            JSONObject().put("text", prop("string", "text to type")),
+            listOf("text"),
+        )
+        tool(
+            "status", "Session status: sessionActive, hosted app, virtual screen size/dpi, running task, accessibility",
+            JSONObject(), emptyList(),
+        )
+        tool(
+            "app_close", "Close the currently hosted app on the virtual screen (keeps the session, returns to app list)",
+            JSONObject(), emptyList(),
+        )
+        tool(
             "app_list", "List installed launchable apps", JSONObject(), emptyList(),
         )
         tool(
@@ -124,13 +147,34 @@ class McpServer(
                 "task_delete", "Delete an automation-service task by id",
                 JSONObject().put("id", prop("string", "task id")), listOf("id"),
             )
-            tool("task_run", "Run an automation-service task now", JSONObject().put("id", prop("string", "task id")), listOf("id"))
+            tool(
+                "task_get", "Get one automation-service task by id (includes lastRunAt/nextRunAt/runCount/lastStatus)",
+                JSONObject().put("id", prop("string", "task id")), listOf("id"),
+            )
+            tool(
+                "task_run", "Run an automation-service task now. Optional waitMs waits for completion and returns lastStatus/runCount",
+                JSONObject().put("id", prop("string", "task id"))
+                    .put("waitMs", prop("integer", "wait for completion up to N ms (default 0 = return immediately)")),
+                listOf("id"),
+            )
+            tool(
+                "task_stop", "Stop an automation-service task: cancel its scheduled alarm and signal the running script to abort",
+                JSONObject().put("id", prop("string", "task id")), listOf("id"),
+            )
             tool(
                 "task_docs",
-                "Return the JS scripting guide: all host.invoke application-layer APIs (screen.tap/swipe/launch/frame, apps.list, log) with signatures and examples, for generating task scripts",
+                "Return the JS scripting guide: host.invoke APIs (screen.tap/swipe/launch/frame/key/text/info, apps.list, log) with signatures and examples, for generating task scripts",
                 JSONObject(), emptyList(),
             )
         }
+        tool(
+            "logs", "Read the unified log buffer (main process, includes script logs). Args: level? limit? clear?",
+            JSONObject()
+                .put("level", prop("string", "filter level: I/W/E/D"))
+                .put("limit", prop("integer", "max entries, default 200"))
+                .put("clear", prop("boolean", "clear the buffer instead of reading")),
+            emptyList(),
+        )
         return arr
     }
 
@@ -158,6 +202,30 @@ class McpServer(
                 arr.put(JSONObject().put("packageName", it.packageName).put("label", it.label))
             }
             arr.toString()
+        }
+        "screen_key" -> {
+            val code = if (args.has("code")) args.optInt("code") else KeyCodes.byName(args.optString("name"))
+            if (code <= 0) {
+                "error: missing required argument 'code' or unknown key 'name' (known: ${KeyCodes.names().joinToString("/")})"
+            } else {
+                "ok=${controller.pressKey(code)} code=$code"
+            }
+        }
+        "screen_text" -> {
+            if (!args.has("text")) "error: missing required argument 'text'"
+            else "ok=${controller.text(args.optString("text"))}"
+        }
+        "status" -> statusJson()
+        "app_close" -> {
+            val ctl = controller
+            if (ctl is com.managedfloating.core.controller.AppScreenController) {
+                runCatching { ctl.closeHostedApp() }.fold(
+                    onSuccess = { "ok=true" },
+                    onFailure = { "error: ${it.message}" },
+                )
+            } else {
+                "error: unsupported controller (app_close requires AppScreenController)"
+            }
         }
         "app_launch" -> {
             val pkg = args.optString("packageName").trim()
@@ -192,8 +260,63 @@ class McpServer(
             if (id.isEmpty()) "error: missing required argument 'id'"
             else "ok=${taskApi?.delete(id)} deleted $id"
         }
-        "task_run" -> "ok=${taskApi?.run(args.optString("id"))}"
+        "task_get" -> {
+            val id = args.optString("id").trim()
+            if (id.isEmpty()) "error: missing required argument 'id'"
+            else taskApi?.getJson(id) ?: "error: task not found: $id"
+        }
+        "task_run" -> {
+            val id = args.optString("id").trim()
+            if (id.isEmpty()) "error: missing required argument 'id'"
+            else {
+                val started = taskApi?.run(id) == true
+                if (!started) "ok=false run rejected (task not found, or another task is running)"
+                else {
+                    val waitMs = args.optLong("waitMs", 0L)
+                    if (waitMs <= 0L) {
+                        "ok=true started $id"
+                    } else {
+                        val finished = taskApi?.waitRun(id, waitMs) == true
+                        val t = taskApi?.getJson(id) ?: "null"
+                        "ok=true finished=$finished task=$t"
+                    }
+                }
+            }
+        }
+        "task_stop" -> {
+            val id = args.optString("id").trim()
+            if (id.isEmpty()) "error: missing required argument 'id'"
+            else "ok=${taskApi?.stop(id)} stopped $id"
+        }
+        "logs" -> {
+            if (args.optBoolean("clear", false)) {
+                MfaLog.clear()
+                "ok=true cleared"
+            } else {
+                val level = args.optString("level").takeIf { it.isNotEmpty() }
+                val limit = args.optInt("limit", 200).coerceIn(1, 500)
+                val arr = JSONArray()
+                MfaLog.snapshot(level).takeLast(limit).forEach {
+                    arr.put(
+                        JSONObject().put("time", it.time).put("level", it.level)
+                            .put("tag", it.tag).put("msg", it.msg),
+                    )
+                }
+                arr.toString()
+            }
+        }
         "task_docs" -> TaskScriptDocs.text()
         else -> "error: unknown tool $name"
+    }
+
+    /** 状态 JSON：与 REST /status 同源（statusProvider + 控制器/承载信息）。 */
+    private fun statusJson(): String {
+        val base = linkedMapOf<String, Any?>(
+            "sessionActive" to controller.isSessionActive(),
+            "hostedApp" to (controller as? com.managedfloating.core.controller.AppScreenController)
+                ?.hosted()?.let { linkedMapOf("packageName" to it.packageName, "label" to it.label) },
+        )
+        statusProvider?.invoke()?.forEach { (k, v) -> base[k] = v }
+        return JSONObject(base as Map<*, *>).toString()
     }
 }

@@ -14,4 +14,10 @@ interface TaskApi {
 
     /** 停止自动化（取消调度 + 中断当前执行）。 */
     fun stop(id: String): Boolean
+
+    /** 单任务 JSON（含运行统计）；不存在返回 null。 */
+    fun getJson(id: String): String?
+
+    /** 等待某任务执行结束（或超时）；返回是否已不再处于运行中。 */
+    fun waitRun(id: String, timeoutMs: Long): Boolean
 }

@@ -182,6 +182,10 @@ class VdSessionImpl(
 
     override fun pressKey(keyCode: Int): Boolean = command("key", keyCode.toString()) != null
 
+    /** 文本注入（ASCII）：参数以 Base64 传给助手，避开文件 IPC 的分隔符与换行问题。 */
+    override fun text(text: String): Boolean =
+        command("text", android.util.Base64.encodeToString(text.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)) != null
+
     override fun closeApp(packageName: String): Boolean = command("closeapp", packageName) != null
 
     /** 释放帧源等本会话持有的资源（新会话接管前调用，避免线程/读取器泄漏）。 */

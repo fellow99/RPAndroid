@@ -75,6 +75,7 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 | POST | `/action/tap` | 点击，body：`{"x":360,"y":500}` |
 | POST | `/action/swipe` | 滑动，body：`{"x1":..,"y1":..,"x2":..,"y2":..,"durMs":300}` |
 | POST | `/action/key` | 按键注入，body：`{"code":4}`（MJPEG 降级模式按键） |
+| POST | `/action/text` | 文本输入，body：`{"text":"北京"}`（ASCII 走系统 input text；非 ASCII 走剪贴板+粘贴） |
 | GET | `/ui` | 界面元素树（JSON，需启用无障碍服务；不可用时 503） |
 
 ### 4.3 自动化服务任务
@@ -89,7 +90,12 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 任务对象字段：`id,name,packageName,script,enabled,kind,intervalMs,cron`（另含运行统计 `lastRunAt,nextRunAt,runCount,lastStatus`）；
 `kind` 取值 `IMMEDIATE` / `INTERVAL` / `CRON`。执行状态见 `GET /status` 的 `runningTaskId`。
 
-> MCP 侧另提供 `task_modify`（按 id 部分修改、保留运行统计）与 `task_docs`（返回 JS host 接口脚本文档），详见 [MCP.md](./MCP.md)。
+- `cron` 支持 5 字段（`分 时 日 月 周`）与 6 字段（`秒 分 时 日 月 周`）；“每分钟第 00 秒”用 `0 * * * * *`。
+- 定时触发会占用全局唯一运行态（与手动 run 互斥）并更新 `runCount/lastRunAt`；完成后 watchdog 回写 `lastStatus`。
+- 定时任务依赖精确闹钟（`USE_EXACT_ALARM`）；若 ROM 回收该权限，息屏/待机会被延迟。
+- `POST /tasks/{id}/stop` 立即释放运行态并写 `lastStatus=cancelled`（脚本中止为尽力而为）。
+
+> MCP 侧另提供 `task_modify`（按 id 部分修改、保留运行统计）、`task_get`、`task_stop`、`task_run(waitMs)`、`logs` 与 `task_docs`（JS host 接口文档），详见 [MCP.md](./MCP.md)。
 
 ## 5. 调用示例
 
