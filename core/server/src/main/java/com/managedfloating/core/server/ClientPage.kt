@@ -390,6 +390,7 @@ object ClientPage {
     videoState = "connecting";
     var proto = location.protocol === "https:" ? "wss://" : "ws://";
     setupPeer();
+    if (!pc) { fallbackMjpeg(); return; } // 无 WebRTC 能力（如非安全上下文/被禁）→ 立即降级，不开信令
     try { ws = new WebSocket(proto + location.host + "/webrtc/signaling?token=" + enc(token)); }
     catch (e) { ws = null; fallbackMjpeg(); return; }
     ws.onopen = function () { while (wsQueue.length) ws.send(wsQueue.shift()); };
@@ -427,6 +428,7 @@ object ClientPage {
     var d = null;
     try { d = JSON.parse(data); } catch (e) { return; }
     if (!d) return;
+    if (!pc) { return; } // 降级后迟到的信令忽略
     if (d.type === "offer") {
       pc.setRemoteDescription({ type: "offer", sdp: d.sdp })
         .then(function () { return pc.createAnswer(); })
