@@ -19,13 +19,15 @@ import java.util.concurrent.CopyOnWriteArrayList
  * [WebRtcPush] —— 007-webrtc 推流 + 反向输入（core:webrtc）。
  *
  * 共享一个 [VideoSource]/[VideoTrack]，[FramePusher] 把 App 进程 FrameHub 的帧转为 I420 喂入，
- * H.264 硬件编码后经 PeerConnection 推给**浏览器**客户端；DataChannel 承载浏览器输入
+ * H.264 硬件编码后经 PeerConnection 推给**浏览器**客户端；DataChannel("input") 承载浏览器输入
  * （归一化坐标），由 server 层解析并收敛到 [ScreenController]（C-1 单入口）。
  *
- * 设计约束：
- * - 仅局域网 host ICE（无 STUN/TURN，无公网）。
- * - 并发 peer 上限 [MAX_PEERS]（2），避免多路硬件编码器撑爆设备。
- * - 只有 org.webrtc 依赖 + core:controller；JSON 解析留在 server 层。
+ * 拓扑：**App 为 offerer（推流方）**——本端 addTrack 后 createOffer（video=sendonly，浏览器只需收），
+ * 并主动创建输入 DataChannel；浏览器 answer。这绕开了 2021 版 libwebrtc 作为 answerer 应答
+ * recvonly 远端 m 行时 “Failed to set remote video description send parameters” 的兼容问题。
+ *
+ * 约束：仅局域网 host ICE（无 STUN/TURN）；并发 peer 上限 [MAX_PEERS]（2）。
+ * JSON 解析留在 server 层，本模块不依赖 Jackson。
  */
 class WebRtcPush(
     private val context: Context,
@@ -35,13 +37,20 @@ class WebRtcPush(
     @Volatile private var factory: PeerConnectionFactory? = null
     @Volatile private var source: VideoSource? = null
     @Volatile private var track: VideoTrack? = null
+    private var eglBase: org.webrtc.EglBase? = null
 
     private val pusher = FramePusher(
         frameSource = { controller.frameSource() },
         sink = { frame ->
             val s = source
             if (s != null) {
-                runCatching { s.getCapturerObserver().onFrameCaptured(frame) }
+                try {
+                    // onFrameCaptured 不接管所有权：本实现对(pusher toI420)自建缓冲区必须显式释放，
+                    // 否则每帧 1.7MB JavaI420Buffer 泄漏（实测 ~25MB/s，进而触发系统 mem-pressure 回收）。
+                    s.getCapturerObserver().onFrameCaptured(frame)
+                } finally {
+                    frame.release()
+                }
             } else {
                 frame.getBuffer().release()
             }
@@ -73,9 +82,20 @@ class WebRtcPush(
                     .setEnableInternalTracer(false)
                     .createInitializationOptions()
             )
-            val f = PeerConnectionFactory.builder().createPeerConnectionFactory()
+            // 显式建 EglBase + 编解码工厂：builder 默认的 RootEglBase 在部分 ROM 上 EGL 上下文创建失败，
+            // 会得到“Failed to set local/remote video description … send/recv parameters”的空 codec 协商。
+            val egl = org.webrtc.EglBase.create(null, org.webrtc.EglBase.CONFIG_RGBA)
+            val encoderFactory = org.webrtc.DefaultVideoEncoderFactory(egl.eglBaseContext, true, true)
+            val decoderFactory = org.webrtc.DefaultVideoDecoderFactory(egl.eglBaseContext)
+            android.util.Log.i(TAG, "enc codecs=" + encoderFactory.supportedCodecs.joinToString { it.name })
+            android.util.Log.i(TAG, "dec codecs=" + decoderFactory.supportedCodecs.joinToString { it.name })
+            val f = PeerConnectionFactory.builder()
+                .setVideoEncoderFactory(encoderFactory)
+                .setVideoDecoderFactory(decoderFactory)
+                .createPeerConnectionFactory()
             val s = f.createVideoSource(false)
             val t = f.createVideoTrack(TRACK_ID, s)
+            eglBase = egl
             factory = f
             source = s
             track = t
@@ -93,7 +113,6 @@ class WebRtcPush(
             session.close()
             if (peers.isEmpty()) {
                 pusher.stop()
-                // 保留 factory/source/track 供下个会话复用；整体释放由 stop() 负责。
             }
         }
     }
@@ -109,9 +128,11 @@ class WebRtcPush(
         runCatching { track?.dispose() }
         runCatching { source?.dispose() }
         runCatching { factory?.dispose() }
+        runCatching { eglBase?.release() }
         track = null
         source = null
         factory = null
+        eglBase = null
     }
 
     fun activePeers(): Int = peers.size
@@ -122,57 +143,78 @@ class WebRtcPush(
         @Volatile var events: PeerEvents? = null
         private val lock = Any()
         private var pc: PeerConnection? = null
+        private var dc: DataChannel? = null
 
+        /** 创建 PeerConnection 并挂发送视频轨（offerer 侧直接 addTrack，offer 为 sendonly）。 */
         fun create(): Boolean = synchronized(lock) {
             val f = push.factory ?: return false
             val cfg = PeerConnection.RTCConfiguration(emptyList())
             cfg.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
             cfg.continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
             val p = f.createPeerConnection(cfg, observer()) ?: return false
-            push.track?.let { p.addTrack(it, emptyList()) }
+            val tr = push.track
+            if (tr != null) {
+                runCatching { p.addTrack(tr, listOf(STREAM_ID)) }  // 带 stream id → offer 含 a=msid，浏览器 ontrack 有流
+                // 只发送（接收留给对端）；避免 offer 里生成 sendrecv/recv 参数（无解码器时协商失败）
+                runCatching {
+                    p.getTransceivers().firstOrNull {
+                        it.mediaType == org.webrtc.MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO
+                    }?.setDirection(org.webrtc.RtpTransceiver.RtpTransceiverDirection.SEND_ONLY)
+                }
+            }
             pc = p
             true
         }
 
-        /** 浏览器 SDP offer → 本地 answer 回推。 */
-        fun handleOffer(sdp: String) {
+        /** 主动发起协商（offerer）：创建输入 DataChannel + createOffer → setLocal → 回推 offer。 */
+        fun startNegotiation() {
             val p = pc ?: return
-            p.setRemoteDescription(
+            val config = DataChannel.Init().apply { ordered = true }
+            val channel = p.createDataChannel(DATA_CHANNEL_INPUT, config)
+            channel.registerObserver(object : DataChannel.Observer {
+                override fun onBufferedAmountChange(previousAmount: Long) {}
+                override fun onStateChange() {}
+                override fun onMessage(buffer: DataChannel.Buffer) {
+                    if (buffer.binary) return
+                    val data = buffer.data
+                    val arr = ByteArray(data.remaining())
+                    data.get(arr)
+                    push.onInput?.invoke(String(arr, Charsets.UTF_8))
+                }
+            })
+            dc = channel
+            p.createOffer(object : SdpObserver {
+                override fun onCreateSuccess(desc: SessionDescription?) {
+                    val pp = pc
+                    if (pp == null || desc == null) return
+                    pp.setLocalDescription(SetLocalObserver, desc)
+                }
+                override fun onCreateFailure(error: String?) { events?.onState("error:offer:$error") }
+                override fun onSetSuccess() {}
+                override fun onSetFailure(error: String?) {}
+            }, MediaConstraints())
+        }
+
+        private val SetLocalObserver = object : SdpObserver {
+            override fun onCreateSuccess(desc: SessionDescription?) {}
+            override fun onCreateFailure(error: String?) {}
+            override fun onSetFailure(error: String?) { events?.onState("error:setLocal:$error") }
+            override fun onSetSuccess() {
+                pc?.localDescription?.let { events?.onLocalOffer(it.description) }
+            }
+        }
+
+        /** 浏览器 SDP answer。 */
+        fun handleAnswer(sdp: String) {
+            pc?.setRemoteDescription(
                 object : SdpObserver {
                     override fun onCreateSuccess(desc: SessionDescription?) {}
                     override fun onCreateFailure(error: String?) {}
-                    override fun onSetFailure(error: String?) {
-                        events?.onState("error:setRemote:$error")
-                    }
-                    override fun onSetSuccess() {
-                        p.createAnswer(AnswerObserver, MediaConstraints())
-                    }
+                    override fun onSetFailure(error: String?) { events?.onState("error:setRemote:$error") }
+                    override fun onSetSuccess() { events?.onState("connected") }
                 },
-                SessionDescription(SessionDescription.Type.OFFER, sdp),
+                SessionDescription(SessionDescription.Type.ANSWER, sdp),
             )
-        }
-
-        private val AnswerObserver = object : SdpObserver {
-            override fun onCreateSuccess(desc: SessionDescription?) {
-                val p = pc
-                if (p == null || desc == null) return
-                p.setLocalDescription(
-                    object : SdpObserver {
-                        override fun onCreateSuccess(desc: SessionDescription?) {}
-                        override fun onCreateFailure(error: String?) {}
-                        override fun onSetFailure(error: String?) {
-                            events?.onState("error:setLocal:$error")
-                        }
-                        override fun onSetSuccess() {
-                            p.localDescription?.let { events?.onLocalAnswer(it.description) }
-                        }
-                    },
-                    desc,
-                )
-            }
-            override fun onCreateFailure(error: String?) { events?.onState("error:answer:$error") }
-            override fun onSetSuccess() {}
-            override fun onSetFailure(error: String?) {}
         }
 
         /** 浏览器 ICE candidate。 */
@@ -187,6 +229,7 @@ class WebRtcPush(
             synchronized(lock) {
                 runCatching { pc?.close() }
                 pc = null
+                dc = null
             }
         }
 
@@ -206,8 +249,9 @@ class WebRtcPush(
             override fun onAddStream(mediaStream: MediaStream?) {}
             override fun onRemoveStream(mediaStream: MediaStream?) {}
             override fun onDataChannel(dataChannel: DataChannel?) {
-                dataChannel?.let { dc ->
-                    dc.registerObserver(object : DataChannel.Observer {
+                // offerer 侧通常不发生（通道由本端创建）；兜底处理远端主动建通道的情况
+                dataChannel?.let { dcRemote ->
+                    dcRemote.registerObserver(object : DataChannel.Observer {
                         override fun onBufferedAmountChange(previousAmount: Long) {}
                         override fun onStateChange() {}
                         override fun onMessage(buffer: DataChannel.Buffer) {
@@ -228,14 +272,15 @@ class WebRtcPush(
     companion object {
         private const val TAG = "WebRtcPush"
         private const val TRACK_ID = "mfa-video-0"
+        private const val STREAM_ID = "mfa-stream-0"
+        private const val DATA_CHANNEL_INPUT = "input"
         const val MAX_PEERS = 2
     }
 }
 
 /** WebRtcPush.PeerSession 的信令回调（server WS 层实现）。 */
 interface PeerEvents {
-    fun onLocalAnswer(sdp: String)
+    fun onLocalOffer(sdp: String)
     fun onLocalIce(sdpMid: String, sdpMLineIndex: Int, candidate: String)
     fun onState(state: String)
-    fun onInput(text: String)
 }

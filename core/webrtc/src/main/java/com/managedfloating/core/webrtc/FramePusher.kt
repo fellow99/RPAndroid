@@ -64,6 +64,10 @@ class FramePusher(
         running.set(false)
         thread?.interrupt()
         thread = null
+        // 释放保留的最近帧（1600×2560 ≈ 16MB），避免无 peer 时长期占用
+        lastRgba = IntArray(0)
+        lastW = 0
+        lastH = 0
     }
 
     /** RGBA（IntArray, 0xAARRGGBB）→ I420 VideoFrame（BT.601）。 */
