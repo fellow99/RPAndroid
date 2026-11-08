@@ -2,7 +2,9 @@ package com.managedfloating.app.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,11 +58,14 @@ fun SettingsScreen() {
     var saved by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
-        // 分辨率默认：与当前屏幕分辨率一致（仅首次未配置时初始化）
+        // 分辨率默认：与当前应用（窗口）分辨率一致，使全屏呈现区域无黑边（仅首次未配置时初始化）
         if (cfg.vScreenWidth == 0 || cfg.vScreenHeight == 0) {
             val dm = context.resources.displayMetrics
-            cfg.vScreenWidth = dm.widthPixels
-            cfg.vScreenHeight = dm.heightPixels
+            val bounds = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                context.getSystemService(WindowManager::class.java)?.currentWindowMetrics?.bounds
+            } else null
+            cfg.vScreenWidth = bounds?.width() ?: dm.widthPixels
+            cfg.vScreenHeight = bounds?.height() ?: dm.heightPixels
             cfg.vScreenDpi = dm.densityDpi
             vw = cfg.vScreenWidth.toString()
             vh = cfg.vScreenHeight.toString()
@@ -109,7 +114,7 @@ fun SettingsScreen() {
                     OutlinedTextField(value = vdpi, onValueChange = { vdpi = it }, label = { Text("dpi") }, modifier = Modifier.weight(1f))
                 }
                 Text(
-                    "默认与当前屏幕分辨率一致；修改后需重新“连接并建立会话”生效。",
+                    "默认与当前应用的分辨率一致，使全屏呈现无黑边；修改后需重新“连接并建立会话”生效。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
