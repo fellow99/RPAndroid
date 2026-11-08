@@ -54,6 +54,7 @@ object ManagedRuntime {
                     mapOf(
                         "accessibilityEnabled" to com.managedfloating.app.a11y.MfaAccessibilityService.isEnabled(),
                         "cachedConnectPort" to cfg.connectPort,
+                        "runningTaskId" to com.managedfloating.app.script.TaskRuntime.runningTaskId,
                     )
                 },
             )

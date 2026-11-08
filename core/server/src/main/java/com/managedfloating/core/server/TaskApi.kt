@@ -11,4 +11,7 @@ interface TaskApi {
     fun modify(id: String, patchJson: String): Boolean
     fun delete(id: String): Boolean
     fun run(id: String): Boolean
+
+    /** 停止自动化（取消调度 + 中断当前执行）。 */
+    fun stop(id: String): Boolean
 }

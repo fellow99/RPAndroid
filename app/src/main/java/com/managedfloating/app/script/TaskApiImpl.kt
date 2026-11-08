@@ -51,9 +51,25 @@ class TaskApiImpl(private val ctx: Context) : TaskApi {
         true
     }.getOrDefault(false)
 
-    override fun run(id: String): Boolean = runCatching {
-        store.get(id) ?: return false
+    override fun run(id: String): Boolean {
+        // 互斥：同一时刻仅一个自动化在执行（"同时只能一个"）；已有执行中则拒绝。
+        if (!TaskRuntime.begin(id)) return false
+        val t = store.get(id)
+        if (t == null) {
+            TaskRuntime.end(id)
+            return false
+        }
         scheduler.runNow(id)
+        return true
+    }
+
+    override fun stop(id: String): Boolean = runCatching {
+        TaskRuntime.end(id)
+        scheduler.stop(id)
         true
     }.getOrDefault(false)
+
+    init {
+        TaskRuntime.attach(ctx.applicationContext)
+    }
 }
