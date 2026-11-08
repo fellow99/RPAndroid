@@ -25,6 +25,26 @@ class AppScreenController(private val context: Context) : ScreenController {
     /** 界面读取器（由 app 注入无障碍服务实现）。 */
     @Volatile var uiReader: (() -> String?)? = null
 
+    /** 当前承载的 App（由远程/UI 任意来源经 [launch] 成功后更新）；会话/主状态同步用。 */
+    @Volatile var hostedPkg: String? = null
+        private set
+    @Volatile var hostedLabel: String? = null
+        private set
+
+    /** 承载状态变化回调（由 app 层注入，把变化发布到 UI 侧，供 /client 与 App UI 同步）。 */
+    @Volatile var onHostChanged: (() -> Unit)? = null
+
+    /** 当前承载的 App；未承载返回 null。 */
+    fun hosted(): AppInfo? = hostedPkg?.let { AppInfo(it, hostedLabel ?: it) }
+
+    /** 会话被清理/重建时调用，重置承载状态并通知 UI。 */
+    fun clearHosted() {
+        val changed = hostedPkg != null || hostedLabel != null
+        hostedPkg = null
+        hostedLabel = null
+        if (changed) onHostChanged?.invoke()
+    }
+
     override fun listApps(): List<AppInfo> {
         val intent = android.content.Intent(IntentAction.ACTION_MAIN).apply { addCategory(IntentCat.CATEGORY_LAUNCHER) }
         val resolved = pm.queryIntentActivities(intent, 0)
@@ -50,7 +70,13 @@ class AppScreenController(private val context: Context) : ScreenController {
     override fun launch(packageName: String, component: String?): LaunchResult {
         val s = vdSession ?: return LaunchResult(false, message = HELPER_UNAVAILABLE)
         return try {
-            s.launch(packageName, component)
+            val r = s.launch(packageName, component)
+            if (r.ok) {
+                hostedPkg = packageName
+                hostedLabel = runCatching { pm.getApplicationInfo(packageName, 0).loadLabel(pm).toString() }.getOrNull()
+                onHostChanged?.invoke()
+            }
+            r
         } catch (e: Exception) {
             LaunchResult(false, message = e.message ?: "launch error")
         }

@@ -324,6 +324,7 @@ class ManagedServer(
                     val ok = withContext(Dispatchers.IO) { session.start() }
                     if (ok) {
                         ctl.vdSession = session
+                        ctl.clearHosted() // 新会话没有承载任何 App，清掉旧承载（同步 App UI）
                         MfaLog.i("Server", "debug session started port=${b.connectPort}")
                     } else {
                         MfaLog.e("Server", "debug session failed: ${hs.lastError}")
@@ -334,7 +335,10 @@ class ManagedServer(
                 // 错误恢复：清理当前（可能已失效的）会话与助手，便于随后重新 /debug/session/start。
                 post("/debug/session/stop") {
                     val ctl = controller
-                    if (ctl is com.managedfloating.core.controller.AppScreenController) ctl.vdSession = null
+                    if (ctl is com.managedfloating.core.controller.AppScreenController) {
+                        ctl.vdSession = null
+                        ctl.clearHosted() // 会话清理时同步清除承载状态（回到图标网格）
+                    }
                     runCatching { shell?.stopHelper() }
                     MfaLog.w("Server", "session stopped via /debug/session/stop")
                     call.respond(mapOf("ok" to true))

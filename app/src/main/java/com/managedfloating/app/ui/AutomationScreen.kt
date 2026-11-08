@@ -32,7 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.managedfloating.app.present.ManagedBridge
-import com.managedfloating.app.script.ScriptService
+import com.managedfloating.app.script.TaskRuntime
 import com.managedfloating.app.script.TaskScheduler
 import com.managedfloating.core.script.ScheduleKind
 import com.managedfloating.core.script.ScriptTask
@@ -66,8 +66,11 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
     }
 
     fun runNow(task: ScriptTask) {
-        if (PresentationHub.runningTaskId != null) return // 互斥：已有正在执行的自动化
-        PresentationHub.setRunning(task.id)
+        // 互斥：同一时刻仅一个自动化在执行（与 /client/REST 共用 TaskRuntime 权威）。
+        if (!TaskRuntime.begin(task.id)) {
+            message = "已有自动化在执行"
+            return
+        }
         message = "已调度执行：${task.name.ifBlank { task.id }}"
         scope.launch {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -80,9 +83,9 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
     fun stop(task: ScriptTask) {
         scope.launch {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                TaskRuntime.end(task.id)
                 TaskScheduler(context.applicationContext).stop(task.id)
             }
-            PresentationHub.setRunning(null)
             message = "已停止：${task.name.ifBlank { task.id }}"
         }
     }
@@ -93,22 +96,19 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
         reload()
     }
 
-    // 运行结果轮询 + 会话状态自愈
+    // 轮询：同步会话状态 + 外部(/client/REST)对任务、执行状态的变更；
+    // 结果回写由 TaskRuntime 的 watchdog 统一消费（此处不再自行 takeRunOutcome）。
     LaunchedEffect(Unit) {
         reload()
+        var prevRunning: String? = null
         while (true) {
             sessionActive = ManagedBridge.controller()?.isSessionActive() == true
-            PresentationHub.runningTaskId?.let { id ->
-                ScriptService.takeRunOutcome(context.applicationContext, id)?.let { out ->
-                    PresentationHub.setRunning(null)
-                    runCatching {
-                        val cur = store.get(id)
-                        if (cur != null) store.upsert(cur.copy(lastStatus = if (out.ok) "ok" else "error: ${out.error}"))
-                    }
-                    message = if (out.ok) "自动化执行完成" else "自动化执行失败：${out.error ?: "未知"}"
-                    reload()
-                }
+            reload()
+            val running = TaskRuntime.runningTaskId
+            if (prevRunning != null && running == null) {
+                message = "自动化运行结束"
             }
+            prevRunning = running
             delay(1200)
         }
     }
@@ -194,7 +194,7 @@ private fun AutomationList(
                 )
             }
         } else {
-            val runningId = PresentationHub.runningTaskId
+            val runningId = TaskRuntime.runningTaskId
             LazyColumn(
                 contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),

@@ -43,6 +43,11 @@ object ManagedRuntime {
             controllerRef = controller
             shellRef = shell
             controller.uiReader = { com.managedfloating.app.a11y.MfaAccessibilityService.instance?.dumpUi() }
+            // 承载状态同步：REST(/client) 的 /session/launch 经 controller.launch 成功后回调，
+            // 把变化发布到 App UI（应用栏自动切换呈现 / 回到网格）。与 App UI 自身发起共用同一入口。
+            controller.onHostChanged = {
+                com.managedfloating.app.ui.PresentationHub.setHosted(controller.hosted())
+            }
             ManagedBridge.bind(controller)
             val cfg = ServerConfig(app)
             val s = ManagedServer(
@@ -55,6 +60,10 @@ object ManagedRuntime {
                         "accessibilityEnabled" to com.managedfloating.app.a11y.MfaAccessibilityService.isEnabled(),
                         "cachedConnectPort" to cfg.connectPort,
                         "runningTaskId" to com.managedfloating.app.script.TaskRuntime.runningTaskId,
+                        // 供客户端(/client)在无会话时用缓存端口自动建立会话
+                        "vScreenWidth" to cfg.vScreenWidth,
+                        "vScreenHeight" to cfg.vScreenHeight,
+                        "vScreenDpi" to cfg.vScreenDpi,
                     )
                 },
             )
@@ -96,6 +105,8 @@ object ManagedRuntime {
         val c = controllerRef ?: return false
         val sh = shellRef ?: return false
         val ctx = appContext ?: return false
+        // 新会话开始前重置承载状态（旧承载随旧会话失效；同步 App UI）
+        c.clearHosted()
         // 释放旧会话持有的帧源/线程（新会话接管前）
         (c.vdSession as? com.managedfloating.core.controller.VdSessionImpl)?.release()
         runCatching { sh.stopHelper() }

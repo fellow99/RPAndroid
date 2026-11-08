@@ -565,12 +565,33 @@ object ClientPage {
     return d;
   }
   function launchApp(pkg) {
-    api("/session/launch", { method: "POST", body: JSON.stringify({ pkg: pkg }) })
-      .then(function (r) { return r.json(); })
-      .then(function (res) {
-        if (res && res.ok) { showToast("已切换：" + (appsMap[pkg] || pkg)); closeAllDrawers(); }
-        else showToast("启动失败：" + ((res && res.message) || "未知错误"));
-      }).catch(function (e) { showToast("启动失败：" + e.message); });
+    function doLaunch() {
+      return api("/session/launch", { method: "POST", body: JSON.stringify({ pkg: pkg }) })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res && res.ok) { showToast("已切换：" + (appsMap[pkg] || pkg)); closeAllDrawers(); return true; }
+          return res || {};
+        });
+    }
+    doLaunch().then(function (res) {
+      if (res === true) return;
+      var st = status;
+      // 无会话 → 用缓存端口自动建立托管会话后再切换（“创建会话 + 切换应用”从 /client 同步到 App UI）。
+      if (st && !st.sessionActive && st.cachedConnectPort && st.cachedConnectPort > 0) {
+        showToast("检测到无会话，正在建立托管会话…");
+        return api("/debug/session/start", {
+          method: "POST",
+          body: JSON.stringify({ connectPort: st.cachedConnectPort, width: st.vScreenWidth || 720, height: st.vScreenHeight || 1560, dpi: st.vScreenDpi || 400 })
+        }).then(function (r) { return r.json(); }).then(function (sres) {
+          if (!sres || !sres.ok) { showToast("建立会话失败：" + ((sres && sres.error) || "未知")); return; }
+          loadStatus();
+          return doLaunch().then(function (r2) {
+            if (r2 !== true) showToast("启动失败：" + ((r2 && r2.message) || "会话未就绪"));
+          });
+        });
+      }
+      showToast("启动失败：" + ((res && res.message) || "会话未就绪"));
+    }).catch(function (e) { showToast("启动失败：" + e.message); });
   }
 
   // ---- 自动化抽屉 ----

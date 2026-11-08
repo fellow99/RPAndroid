@@ -33,6 +33,11 @@ object PresentationHub {
         presentationMode = PresentationMode.EMBEDDED
     }
 
+    /** 远程/服务端来源的承载状态同步：只更新承载 App，不改出示呈现方式（不打断全屏/浮窗）。 */
+    fun setHosted(app: AppInfo?) {
+        hostedApp = app
+    }
+
     fun setMode(mode: PresentationMode) {
         presentationMode = mode
     }
