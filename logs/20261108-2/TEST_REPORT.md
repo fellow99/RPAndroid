@@ -16,6 +16,14 @@
   无 `APP_SCOUT_HANG`（修复前 onCreate 6s 卡死/被回收 ×4）。
 - **内存泄漏修复前后对比**（streaming 60s）：Native Heap `1.2GB→2.8GB`（+25MB/s，旧）→ `~40MB` 平坦（新）。
 
+## 回归（评审修正后）
+- [PASS] WebRTC 推流：`RTC:connected`、540×1170 播放（评审修正后再验证）。
+- [PASS] 点击注入：真实点击 → 设置页导航，`/frame` md5 `7563b1a0…` → `118f95d9…`。
+- [PASS] REST：`/status`(sessionActive)、`/frame`、`/session/launch`、`/action/*` 正常。
+- [PASS] MJPEG `/stream` 推流正常（~63KB/3s）。
+- [PASS] 2 分钟持续推流：pid 恒定、Native ~40-46MB 无增长趋势、零 hang。
+- [PASS] 安全复核：`.pi/` 已移出 git；旧日志 token 置占位符；本需求文档无真实 IP/token。
+
 ## 平台/环境备注
 - 局域网直连测试模型；浏览器（chromium）经 `http://<手机IP>:8099/webrtc?token=<token>` 接入。
 - 真机 token 为本地测试值，未落盘文档（本文档以下划线占位）。

@@ -44,7 +44,7 @@
 - [x] commit: `fix(runtime): …`
 
 ## T6 文档、评审与回归
-- [ ] `docs/WebRTC.md` 接入文档（端到端示例、鉴权、限制；一律占位符，不落真实 IP/token/凭证）。
-- [ ] requesting-code-review → `logs/<date>/REVIEW_REPORT.md`；receiving-code-review 修 Critical/Important → commit: `code-review-fix: …`。
-- [ ] 回归：MJPEG/REST/MCP 全量抽查；填 [test-cases.md](./test-cases.md) 执行记录。
-- [ ] commit: `docs(webrtc): add WebRTC integration guide and test records`（如需要）
+- [x] `docs/WebRTC.md` 接入文档（端到端示例、鉴权、限制；一律占位符，不落真实 IP/token/凭证）。
+- [x] requesting-code-review → `logs/20261108-2/REVIEW_REPORT.md`；receiving-code-review 修 Critical/Important → commit: `code-review-fix: …`。
+- [x] 回归：REST/MJPEG/WebRTC 推流/点击注入全量抽验 + 2min 稳定性；填 [test-cases.md](./test-cases.md) 执行记录；安全复核（`.pi/` 移出 git、旧日志 token 置占位符）。
+- [x] commit: `docs(webrtc): add WebRTC integration guide and test records` / 回归记录随 TEST_REPORT 提交。
