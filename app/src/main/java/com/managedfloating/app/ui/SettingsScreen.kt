@@ -164,7 +164,7 @@ fun SettingsScreen() {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("REST / MCP / MJPEG", style = MaterialTheme.typography.bodyLarge)
+                    Text("REST / MCP / MJPEG / WebRTC / 客户端", style = MaterialTheme.typography.bodyLarge)
                     Text(
                         "查看当前设备的访问地址与鉴权方式",
                         style = MaterialTheme.typography.bodySmall,
@@ -213,7 +213,7 @@ private fun Field(
     )
 }
 
-/** 接入信息弹窗（API / MCP / MJPEG），不含真实 IP/token，展示占位推导。 */
+/** 接入信息弹窗（播控客户端 / WebRTC / API / MCP / MJPEG），不含真实 IP/token，展示占位推导。 */
 @Composable
 private fun ConnectionInfoDialog(cfg: ServerConfig, onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -228,6 +228,18 @@ private fun ConnectionInfoDialog(cfg: ServerConfig, onDismiss: () -> Unit) {
         text = {
             Text(
                 buildString {
+                    appendLine("▶ 播控客户端（/client）")
+                    appendLine("  浏览器打开：$base/client")
+                    appendLine("  已设 token 时：$base/client?token=<token>")
+                    appendLine("  单页播控台：视频回显(WebRTC/MJPEG)、应用切换、自动化调度、日志")
+                    appendLine("  详见 docs/Client.md")
+                    appendLine()
+                    appendLine("▶ WebRTC 控制台")
+                    appendLine("  浏览器打开：$base/webrtc")
+                    appendLine("  已设 token 时：$base/webrtc?token=<token>")
+                    appendLine("  信令：ws://<host>:$port/webrtc/signaling（DataChannel 输入）")
+                    appendLine("  并发浏览器上限 2；非安全上下文自动降级 MJPEG")
+                    appendLine()
                     appendLine("▶ REST API")
                     appendLine("  局域网 Base：$base")
                     appendLine("  USB(adb forward)：http://localhost:$port")
