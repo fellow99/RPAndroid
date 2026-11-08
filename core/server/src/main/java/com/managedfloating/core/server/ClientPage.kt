@@ -21,6 +21,7 @@ object ClientPage {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="icon" href="data:,"/>
 <title>ManagedFloatingApp 客户端</title>
 <style>
   :root { color-scheme: dark; }
@@ -28,7 +29,7 @@ object ClientPage {
   body { margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
          background:#0f1115; color:#e8eaed; height:100vh; overflow:hidden; }
   header { display:flex; align-items:center; gap:10px; padding:8px 12px; background:#1a1d24;
-           border-bottom:1px solid #2a2e39; position:fixed; top:0; left:0; right:0; z-index:20; }
+           border-bottom:1px solid #2a2e39; position:fixed; top:0; left:0; right:0; z-index:70; }
   .brand { display:flex; align-items:center; gap:8px; font-weight:600; font-size:15px; white-space:nowrap; }
   .dot { width:9px; height:9px; border-radius:50%; background:#5f6368; display:inline-block; }
   .dot.on { background:#34a853; }
@@ -150,7 +151,7 @@ object ClientPage {
   </div>
 </aside>
 
-<aside class="drawer" id="drawer-log">
+<aside class="drawer" id="drawer-logs">
   <h3>日志</h3>
   <div class="body" id="logList"></div>
   <div class="footer">
@@ -308,7 +309,6 @@ object ClientPage {
   function startMain() {
     hide("tokenOverlay"); hide("errorOverlay");
     persistToken();
-    bindEvents();
     loadStatus();
     statusPoll();
     probeAndStartVideo();
@@ -779,6 +779,8 @@ object ClientPage {
     }).catch(function () { qf("tokenErr").textContent = "服务不可达"; });
   }
 
+  // 先绑定静态事件（含 token 浮窗按钮），再启动引导；token 浮窗出现时也必须可交互。
+  bindEvents();
   boot();
 })();
 </script>
