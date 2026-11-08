@@ -79,7 +79,16 @@ class ManagedServer(
                 }
             })
             routing {
-                get("/health") { call.respond(mapOf("ok" to true, "service" to "ManagedFloatingApp")) }
+                get("/health") {
+                    call.respond(
+                        mapOf(
+                            "ok" to true,
+                            "service" to "ManagedFloatingApp",
+                            "port" to port,
+                            "authEnabled" to authToken.isNotEmpty(),
+                        ),
+                    )
+                }
 
                 get("/status") {
                     val base = linkedMapOf<String, Any?>(
@@ -110,6 +119,19 @@ class ManagedServer(
                 get("/apps") {
                     val apps = withContext(Dispatchers.IO) { controller.listApps() }
                     call.respond(apps)
+                }
+
+                // 应用图标（008-client 应用/自动化抽屉）：PNG + 进程内缓存；未知包 404。
+                get("/apps/{pkg}/icon") {
+                    val pkg = call.parameters["pkg"] ?: return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "no pkg"))
+                    val ctx = appContext
+                    if (ctx == null) {
+                        call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "icon unavailable (no app context)"))
+                        return@get
+                    }
+                    val bytes = withContext(Dispatchers.IO) { AppIconCache.icon(ctx, pkg) }
+                    if (bytes == null) call.respond(HttpStatusCode.NotFound, mapOf("error" to "no icon for $pkg"))
+                    else call.respondBytes(bytes, ContentType.Image.PNG)
                 }
 
                 post("/session/launch") {
@@ -152,6 +174,14 @@ class ManagedServer(
                         controller.swipe(b.x1, b.y1, b.x2, b.y2, b.durMs ?: 300)
                     }
                     if (!ok) MfaLog.w("Server", "swipe failed - session inactive?")
+                    call.respond(mapOf("ok" to ok))
+                }
+
+                // 任意按键注入（008-client MJPEG 降级模式的按键操作）。
+                post("/action/key") {
+                    val b = mapper.readValue<KeyReq>(call.receive<String>())
+                    val ok = withContext(Dispatchers.IO) { controller.pressKey(b.code) }
+                    if (!ok) MfaLog.w("Server", "key failed code=${b.code} - session inactive?")
                     call.respond(mapOf("ok" to ok))
                 }
 
@@ -228,6 +258,11 @@ class ManagedServer(
                     }
                     call.respondText(WebRtcConsole.PAGE, ContentType.Text.Html)
                 }
+
+                // 008-client：播控客户端页面（单文件，token 经 query）。
+                get("/client") {
+                    call.respondText(ClientPage.HTML, ContentType.Text.Html)
+                }
                 webSocket("/webrtc/signaling") {
                     val w = webrtc
                     if (w == null) {
@@ -251,6 +286,10 @@ class ManagedServer(
                     post("/tasks/{id}/run") {
                         val id = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "no id"))
                         call.respond(mapOf("ok" to taskApi.run(id)))
+                    }
+                    post("/tasks/{id}/stop") {
+                        val id = call.parameters["id"] ?: return@post call.respond(HttpStatusCode.BadRequest, mapOf("error" to "no id"))
+                        call.respond(mapOf("ok" to taskApi.stop(id)))
                     }
                 }
 
@@ -383,6 +422,7 @@ class ManagedServer(
     data class LaunchReq(val pkg: String, val component: String? = null)
     data class TapReq(val x: Int, val y: Int)
     data class SwipeReq(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val durMs: Int? = null)
+    data class KeyReq(val code: Int)
     data class PairReq(
         val host: String,
         val pairPort: Int,
