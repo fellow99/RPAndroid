@@ -64,7 +64,8 @@ class ManagedServer(
             install(createApplicationPlugin("TokenAuth") {
                 onCall { call ->
                     val path = call.request.local.uri
-                    if (authToken.isNotEmpty() && path != "/health" && !path.startsWith("/debug/")) {
+                    // /client 为静态页面（无鉴权内容），放行以便页面自行完成 token 输入引导；其数据接口仍受鉴权。
+                    if (authToken.isNotEmpty() && path != "/health" && path != "/client" && !path.startsWith("/debug/")) {
                         val bearer = call.request.headers["Authorization"]
                             ?.removePrefix("Bearer")?.trim()
                         val got = call.request.headers[ServerConfig.HEADER]
