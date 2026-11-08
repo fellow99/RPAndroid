@@ -49,6 +49,7 @@ dependencies {
     runtimeOnly(libs.node.runtime)
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.android)
 
     // Compose UI（101-main-ui 里程碑启用）
     implementation(platform(libs.compose.bom))

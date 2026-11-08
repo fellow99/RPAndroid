@@ -1,26 +1,41 @@
 package com.managedfloating.app.present
 
-import android.annotation.SuppressLint
-import android.graphics.Bitmap
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
-import android.view.MotionEvent
-import android.widget.FrameLayout
-import android.widget.ImageView
+import android.provider.Settings
 import android.widget.TextView
-import android.app.Activity
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.managedfloating.app.ui.EmbeddedScreen
+import com.managedfloating.app.ui.PresentationHub
+import com.managedfloating.app.ui.PresentationMode
+import com.managedfloating.app.ui.theme.ManagedTheme
+import com.managedfloating.core.controller.ScreenController
 
 /**
- * [ScreenActivity] —— **常规模式**：全屏显示被托管 App 画面，触摸回写到虚拟屏。
+ * [ScreenActivity] —— **全屏模式**：全屏承载被托管 App 画面，触摸回写。
  *
- * 画面按虚拟屏等比缩放居中；触摸经 [TouchMapper] 换算后经 [ScreenController] 注入。
- * 需要 [ManagedRuntime] 已启动会话（controller 有 VdSession）。
+ * 系统返回键转发给被托管 App（FR-101-9）；右上角提供 嵌入 / 浮窗 / 关闭 悬浮控制。
+ * 退出时若仍是全屏模式则回落为嵌入（保留 hostedApp）。
  */
-@SuppressLint("ViewConstructor")
-class ScreenActivity : Activity() {
-
-    private var imageView: ImageView? = null
-    private var poller: FramePoller? = null
-    private var latest: Bitmap? = null
+class ScreenActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,38 +44,76 @@ class ScreenActivity : Activity() {
             setContentView(TextView(this).apply { text = "会话未就绪：请先在主界面启动会话" })
             return
         }
-        val root = FrameLayout(this)
-        val iv = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
-        root.addView(iv, FrameLayout.LayoutParams(-1, -1))
-        imageView = iv
-        setContentView(root)
+        PresentationHub.setMode(PresentationMode.FULLSCREEN)
 
-        val p = FramePoller(controller)
-        poller = p
-        p.start { bmp ->
-            latest?.recycle()
-            latest = bmp
-            iv.setImageBitmap(bmp)
-        }
-
-        root.setOnTouchListener { v, e -> handleTouch(v.width, v.height, e) }
-    }
-
-    private fun handleTouch(w: Int, h: Int, e: MotionEvent): Boolean {
-        val controller = ManagedBridge.controller() ?: return false
-        val p = poller ?: return false
-        if (e.action == MotionEvent.ACTION_DOWN) {
-            TouchMapper.map(e.x, e.y, w, h, p.virtualWidth, p.virtualHeight)?.let { (x, y) ->
-                Thread { runCatching { controller.tap(x, y) } }.start()
+        val onAction: (String) -> Unit = { action ->
+            when (action) {
+                "embed" -> {
+                    PresentationHub.setMode(PresentationMode.EMBEDDED)
+                    finish()
+                }
+                "floating" -> {
+                    if (!Settings.canDrawOverlays(this)) {
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:$packageName"),
+                            ),
+                        )
+                        Toast.makeText(this, "请授予“显示在其他应用上层”，再点浮窗模式", Toast.LENGTH_LONG).show()
+                    } else {
+                        FloatingService.start(this)
+                        PresentationHub.setMode(PresentationMode.FLOATING)
+                        finish()
+                    }
+                }
+                "close" -> {
+                    FloatingService.stop(this)
+                    PresentationHub.clearHosted()
+                    finish()
+                }
             }
         }
-        return true
+
+        setContent {
+            ManagedTheme {
+                FullscreenPresentation(controller = controller, onAction = onAction)
+            }
+        }
     }
 
     override fun onDestroy() {
-        poller?.stop()
-        latest?.recycle()
-        latest = null
+        if (PresentationHub.presentationMode == PresentationMode.FULLSCREEN) {
+            PresentationHub.setMode(PresentationMode.EMBEDDED)
+        }
         super.onDestroy()
+    }
+}
+
+/** 全屏呈现：画帧 + 右上角悬浮控制 + 返回键转发。 */
+@Composable
+private fun FullscreenPresentation(controller: ScreenController, onAction: (String) -> Unit) {
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        EmbeddedScreen(controller, Modifier.fillMaxSize())
+        Row(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+            ControlChip("嵌入") { onAction("embed") }
+            ControlChip("浮窗") { onAction("floating") }
+            ControlChip("关闭") { onAction("close") }
+        }
+        // 返回键转发给被托管 App（不退出全屏）
+        BackHandler { Thread { runCatching { controller.back() } }.start() }
+    }
+}
+
+@Composable
+private fun ControlChip(label: String, onClick: () -> Unit) {
+    Surface(
+        color = Color(0x99000000),
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.padding(4.dp),
+    ) {
+        TextButton(onClick = onClick) {
+            Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge)
+        }
     }
 }

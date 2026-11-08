@@ -32,6 +32,7 @@ class FloatingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isActive = true
         val controller = ManagedBridge.controller()
         if (controller == null) { stopSelf(); return }
         if (!Settings.canDrawOverlays(this)) { stopSelf(); return }
@@ -102,6 +103,7 @@ class FloatingService : Service() {
     }
 
     override fun onDestroy() {
+        isActive = false
         poller?.stop()
         root?.let { runCatching { wm?.removeView(it) } }
         latest?.recycle(); latest = null
@@ -110,6 +112,11 @@ class FloatingService : Service() {
     }
 
     companion object {
+        /** 浮窗当前是否活动（主界面用于返回键转发判定）。 */
+        @Volatile
+        var isActive: Boolean = false
+            private set
+
         fun start(ctx: android.content.Context) {
             ctx.startService(Intent(ctx, FloatingService::class.java))
         }

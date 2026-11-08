@@ -179,6 +179,12 @@ class ScriptService : Service() {
             return File(files, "mfa-stop/${taskId}.flag")
         }
 
+        /** 运行结果文件：:node runner 完成后写入，主进程读后即删（单次消费）。 */
+        private fun runOutcomeFile(ctx: Context, taskId: String): File {
+            val files = File(ctx.applicationInfo.dataDir, "files")
+            return File(files, "mfa-run/$taskId.json")
+        }
+
         /** 请求 :node 进程中止某任务的当前执行（写停止信号文件；主进程侧调用）。 */
         fun requestStop(ctx: Context, taskId: String) {
             runCatching {
@@ -186,6 +192,16 @@ class ScriptService : Service() {
                 f.parentFile?.mkdirs()
                 f.writeText("stop")
             }
+        }
+
+        /** 读取 :node runner 报告的某任务执行结果（有则消费并删除）。 */
+        fun takeRunOutcome(ctx: Context, taskId: String): RunOutcome? {
+            val f = runOutcomeFile(ctx, taskId)
+            if (!f.exists()) return null
+            return runCatching {
+                val o = JSONObject(f.readText())
+                RunOutcome(o.optBoolean("ok"), o.optString("error").takeIf { it.isNotEmpty() })
+            }.getOrNull().also { runCatching { f.delete() } }
         }
 
         /** 请求 :node 进程执行一个任务（由主进程调度器调用）。 */
@@ -208,6 +224,7 @@ class ScriptService : Service() {
             const fs = require('fs');
             const path = require('path');
             const STOP_DIR = path.join(__dirname, '..', '..', 'mfa-stop');
+            const RUN_DIR = path.join(__dirname, '..', '..', 'mfa-run');
             let currentTaskId = null;
 
             function stopRequested() {
@@ -217,6 +234,13 @@ class ScriptService : Service() {
             function clearStop() {
               if (!currentTaskId) return;
               try { fs.unlinkSync(path.join(STOP_DIR, currentTaskId + '.flag')); } catch (e) {}
+            }
+            function writeOutcome(taskId, ok, error) {
+              if (!taskId) return;
+              try {
+                fs.mkdirSync(RUN_DIR, { recursive: true });
+                fs.writeFileSync(path.join(RUN_DIR, taskId + '.json'), JSON.stringify({ ok: !!ok, error: error || null, at: Date.now() }));
+              } catch (e) {}
             }
 
             const hosted = {};
@@ -242,11 +266,14 @@ class ScriptService : Service() {
                       try {
                         await (new Function('host', 'return (async()=>{' + r.script + '})()'))(hostProxy);
                         await host.invoke('script.done', { taskId: r.taskId, ok: true });
+                        writeOutcome(r.taskId, true, null);
                       } catch (e) {
                         await host.invoke('script.done', { taskId: r.taskId, ok: false, error: String(e) });
+                        writeOutcome(r.taskId, false, String(e));
                       }
                     } else {
                       await host.invoke('script.done', { taskId: r.taskId, ok: false, error: 'cancelled by user' });
+                      writeOutcome(r.taskId, false, 'cancelled by user');
                     }
                     clearStop();
                     currentTaskId = null;
@@ -258,3 +285,6 @@ class ScriptService : Service() {
         """.trimIndent()
     }
 }
+
+/** 自动化任务一次执行的结果（:node runner 写主进程读）。 */
+data class RunOutcome(val ok: Boolean, val error: String?)
