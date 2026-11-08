@@ -59,8 +59,10 @@ class TaskApiImpl(private val ctx: Context) : TaskApi {
             TaskRuntime.end(id)
             return false
         }
-        scheduler.runNow(id)
-        return true
+        return runCatching {
+            scheduler.runNow(id)
+            true
+        }.getOrElse { TaskRuntime.end(id); false }
     }
 
     override fun stop(id: String): Boolean = runCatching {

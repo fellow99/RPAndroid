@@ -439,7 +439,6 @@ object ClientPage {
       if (videoState === "connecting" || videoState === "rtc") setBadge("RTC:" + d.state, d.state.indexOf("error") === 0 ? "err" : "");
     }
   }
-  function wireData() {}
   function sendWs(o) {
     var s = JSON.stringify(o);
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(s); else if (ws) wsQueue.push(s);

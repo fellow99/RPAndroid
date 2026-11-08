@@ -16,8 +16,11 @@ import java.io.ByteArrayOutputStream
  */
 object AppIconCache {
 
-    private const val MAX_ENTRIES = 64
-    private val cache = LruCache<String, ByteArray>(MAX_ENTRIES)
+    /** 缓存总字节上限（移动设备内存保护）。 */
+    private const val MAX_BYTES = 8 * 1024 * 1024
+    private val cache = object : LruCache<String, ByteArray>(MAX_BYTES) {
+        override fun sizeOf(key: String, value: ByteArray): Int = value.size
+    }
 
     /** 返回 pkg 的图标 PNG 字节；未知包/不可用时返回 null。 */
     fun icon(context: Context, pkg: String): ByteArray? {
@@ -30,8 +33,8 @@ object AppIconCache {
             bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
             out.toByteArray()
         }.getOrNull() ?: return null
-        // 只缓存合理尺寸；超大直接返回不缓存
-        if (bytes.isNotEmpty() && bytes.size <= 1_000_000) cache.put(pkg, bytes)
+        // 单图标超大（>MAX_BYTES）不会被缓存（LruCache 立即淘汰），直接返回但不缓存。
+        cache.put(pkg, bytes)
         return bytes
     }
 
