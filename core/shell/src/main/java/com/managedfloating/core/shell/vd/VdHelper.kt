@@ -7,11 +7,9 @@ import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.os.Looper
-import android.os.Parcel
 import android.view.Surface
 import java.io.File
 import java.io.FileOutputStream
-import java.nio.ByteOrder
 
 /**
  * [VdHelper] —— 以 shell UID(app_process) 运行的虚拟屏助手（打进 App 的 dex，用 App 的 base.apk 作 CLASSPATH 加载）。
@@ -50,9 +48,9 @@ object VdHelper {
         val w = args.getOrElse(1) { "720" }.toInt()
         val h = args.getOrElse(2) { "1560" }.toInt()
         val dpi = args.getOrElse(3) { "400" }.toInt()
-        // 007-webrtc：可选 `--surface-sock <name>` —— 从该抽象 socket 读取 App 进程的 Surface 建虚拟屏，
-        // 帧直接落在 App 进程（FrameHub）。未提供/交接失败时回退旧路径：自持 ImageReader + 文件 IPC。
-        val surfaceSock = if (args.size > 4 && args[4] == "--surface-sock") args.getOrNull(5) else null
+        // 007-webrtc：可选 `--nonce <n>` —— 经 App 导出的 ContentProvider 拉取其 FrameHub Surface 建虚拟屏，
+        // 帧直接落在 App 进程。未提供/交接失败时回退旧路径：自持 ImageReader + 文件 IPC。
+        val nonce = if (args.size > 4 && args[4] == "--nonce") args.getOrNull(5) else null
 
         ipcDir.mkdirs()
         val cmd = File(ipcDir, "cmd.txt")
@@ -73,9 +71,12 @@ object VdHelper {
         }
 
         val appSurface: Surface? = try {
-            if (surfaceSock != null) readSurface(surfaceSock) else null
+            val s = if (nonce != null) takeSurface(nonce) else null
+            if (s != null) File(ipcDir, "surface_status.txt").writeText("ok")
+            s
         } catch (t: Throwable) {
             println("MFA_HELPER_SURFACE_FALLBACK ${t.message}")
+            runCatching { File(ipcDir, "surface_status.txt").writeText("err: ${t.javaClass.simpleName}: ${t.message}") }
             null
         }
         val reader: ImageReader? = if (appSurface == null) ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2) else null
@@ -133,30 +134,44 @@ object VdHelper {
         }
     }
 
-    /** 从抽象 socket 读取 App 进程交来的 Surface（4 字节小端长度前缀 + Parcel 字节）。 */
-    private fun readSurface(name: String): Surface {
-        val sock = android.net.LocalSocket()
+    /**
+     * 经 App 导出的 ContentProvider 拉取待交接 Surface（Mika 式）：用 ActivityManager.getContentProviderExternal
+     * 拿到 provider 的 binder，以 AttributionSource(shell) 身份 call——跨 UID Binder 事务天然携带 Parcelable Surface。
+     * 普通 Context#contentResolver.call 会因“package 与 uid 不匹配”(shell 包名/uid 归属问题)被拒。
+     */
+    private fun takeSurface(nonce: String): Surface {
+        val authority = com.managedfloating.core.shell.MfaHandoff.AUTHORITY
+        val am = Class.forName("android.app.ActivityManager").getMethod("getService").invoke(null)
+        val token = android.os.Binder()
+        val holder = am.javaClass.getMethod(
+            "getContentProviderExternal", String::class.java, Int::class.javaPrimitiveType,
+            android.os.IBinder::class.java, String::class.java,
+        ).invoke(am, authority, 0, token, "mfa-helper")
+            ?: throw IllegalStateException("provider $authority not found")
         try {
-            sock.connect(android.net.LocalSocketAddress(name, android.net.LocalSocketAddress.Namespace.ABSTRACT))
-            sock.soTimeout = 15_000
-            val input = sock.inputStream
-            val head = ByteArray(4)
-            readFully(input, head)
-            val len = java.nio.ByteBuffer.wrap(head).order(ByteOrder.LITTLE_ENDIAN).int
-            if (len <= 0 || len > 4 * 1024 * 1024) throw IllegalStateException("bad surface parcel length $len")
-            val blob = ByteArray(len)
-            readFully(input, blob)
-            val p = Parcel.obtain()
-            try {
-                p.unmarshall(blob, 0, blob.size)
-                p.setDataPosition(0)
-                return p.readParcelable<Surface>(Surface::class.java.classLoader)
-                    ?: throw IllegalStateException("null surface from parcel")
-            } finally {
-                p.recycle()
+            val provider = holder.javaClass.getField("provider").get(holder)
+                ?: throw IllegalStateException("provider field null")
+            val extras = android.os.Bundle().apply {
+                putString(com.managedfloating.core.shell.MfaHandoff.KEY_NONCE, nonce)
             }
+            val call = provider.javaClass.methods.first { m ->
+                m.name == "call" && m.parameterTypes.size == 5 &&
+                    m.parameterTypes[0] == android.content.AttributionSource::class.java
+            }
+            val caller = android.content.AttributionSource.Builder(android.os.Process.myUid())
+                .setPackageName("com.android.shell").build()
+            val result = call.invoke(provider, caller, authority, com.managedfloating.core.shell.MfaHandoff.METHOD_TAKE_SURFACE, null, extras) as android.os.Bundle?
+            val surface: Surface? = result?.getParcelable(com.managedfloating.core.shell.MfaHandoff.KEY_SURFACE)
+            return surface ?: throw IllegalStateException(
+                "no surface (result=" + result?.getString(com.managedfloating.core.shell.MfaHandoff.KEY_RESULT) + ")"
+            )
         } finally {
-            runCatching { sock.close() }
+            runCatching {
+                am.javaClass.getMethod(
+                    "removeContentProviderExternalAsUser",
+                    String::class.java, android.os.IBinder::class.java, Int::class.javaPrimitiveType,
+                ).invoke(am, authority, token, 0)
+            }
         }
     }
 

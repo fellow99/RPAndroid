@@ -44,6 +44,12 @@
             android:name=".script.AlarmReceiver"
             android:exported="false" />
 
+        <provider
+            android:name=".helper.HandoffProvider"
+            android:authorities="com.managedfloating.app.helper"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
         <service
             android:name=".a11y.MfaAccessibilityService"
             android:exported="true"
