@@ -64,22 +64,51 @@ adb reverse tcp:8099 tcp:8099
 - **SSE**：`GET /mcp/sse`，先返回 `event: endpoint` + `data: /mcp?sessionId=<id>`；
   随后 `POST /mcp?sessionId=<id>` 提交 JSON-RPC，响应经该 SSE 通道以 `event: message` 推回（POST 返回 202）。
 
-工具清单：
-| 工具 | 说明 |
-|------|------|
-| `screen_capture` | 截当前虚拟屏（base64 PNG） |
-| `ui_read` | 读界面元素树（需无障碍服务；见「界面读取」） |
-| `screen_tap` | 点击（虚拟屏坐标） |
-| `screen_swipe` | 滑动 |
-| `app_list` | 列出 App |
-| `app_launch` | 承载 App |
-| `task_list` / `task_create` / `task_run` | 脚本任务 |
+### 工具清单（共 9 个，以 `tools/list` 实时返回为准）
+
+#### 屏幕与交互
+| 工具 | 说明 | 参数（必填标 *） |
+|------|------|------------------|
+| `screen_capture` | 截当前虚拟屏，返回 base64 PNG；静态画面无新帧时返回最后一帧 | 无 |
+| `ui_read` | 读界面元素树（JSON 数组）；需先启用无障碍服务，未启用时优雅降级提示 | 无 |
+| `screen_tap` | 在虚拟屏坐标点击 | `x*`, `y*` |
+| `screen_swipe` | 虚拟屏滑动 | `x1*`,`y1*`,`x2*`,`y2*`，可选 `durMs`（默认 300） |
+
+#### 应用管理
+| 工具 | 说明 | 参数（必填标 *） |
+|------|------|------------------|
+| `app_list` | 列出所有可启动的已安装应用（packageName + label） | 无 |
+| `app_launch` | 把指定 App 承载到虚拟屏 | `packageName*`，可选 `component` |
+
+#### 脚本任务
+| 工具 | 说明 | 参数（必填标 *） |
+|------|------|------------------|
+| `task_list` | 列出脚本任务 | 无 |
+| `task_create` | 创建/更新任务 | `task*`（对象：`id,name,script,enabled,kind,intervalMs,cron`） |
+| `task_run` | 立即执行某个任务 | `id*` |
+
+#### 调用约定
+- 协议方法：`initialize`、`notifications/initialized`（通知，回 202）、`ping`、`tools/list`、`tools/call`。
+- 工具返回统一为 `result.content[0].text`；失败时 `result.isError=true`，文本以 `error:` 或 `ok=false` 开头。
+- 标准 JSON-RPC 错误码：解析失败 `-32700`、未知方法 `-32601`；鉴权失败 HTTP `401`（带 `WWW-Authenticate: Bearer`）。
+- **前提**：屏幕类工具（capture/tap/swipe/app_launch）需先建立会话（见 §6，`/status` 的 `sessionActive=true`）；`ui_read` 需启用无障碍。
 
 示例：
 ```bash
+# 点击（参数是 x/y）
 curl -s -X POST http://localhost:8099/mcp \
-  -H 'Content-Type: application/json' -H 'X-Auth-Token: <token>' \
+  -H 'Content-Type: application/json' -H 'Authorization: Bearer <token>' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"screen_tap","arguments":{"x":360,"y":500}}}'
+
+# 承载 App（注意参数名是 packageName，不是 pkg）
+curl -s -X POST http://localhost:8099/mcp \
+  -H 'Content-Type: application/json' -H 'Authorization: Bearer <token>' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"app_launch","arguments":{"packageName":"com.android.settings"}}}'
+
+# 截图（返回 base64 PNG）
+curl -s -X POST http://localhost:8099/mcp \
+  -H 'Content-Type: application/json' -H 'Authorization: Bearer <token>' \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"screen_capture","arguments":{}}}'
 ```
 
 ## 5. 界面读取（ui_read / GET /ui）
@@ -90,7 +119,7 @@ curl -s -X POST http://localhost:8099/mcp \
   此时 `/ui` 只能读到默认 display 的元素；虚拟屏内容建议用 `screen_capture`（截图）+ 视觉模型，
   或在后续里程碑改用 shell 侧定向读取。
 
-## 5.1 视频流（MJPEG）
+## 6. 视频流（MJPEG）
 
 ```bash
 # 浏览器直接打开（带 token 时用 ?token= 或请求头视客户端而定）
@@ -99,7 +128,7 @@ curl -H 'X-Auth-Token: <token>' http://localhost:8099/stream --output stream.mjp
 每帧为 PNG（`--frame` 分隔）。最多 8 路并发（`MAX_STREAM_CLIENTS`），超出返回 503。
 WebRTC 为二期（未实现）。
 
-## 6. 前置：会话就绪
+## 7. 前置：会话就绪
 
 REST/MCP 的屏幕操作需要先建立会话（配对 + 连 adbd + 拉起助手）：
 
@@ -111,7 +140,7 @@ curl -X POST http://localhost:8099/debug/session/start \
 - 连接端口可从设备 `/proc/net/tcp` 里 uid=2000 的监听端口读到（App 内受 hidepid 限制，故需外部提供/缓存）。
 - App 重启后会用缓存的 connectPort 自动恢复会话。
 
-## 7. 安全提示
+## 8. 安全提示
 
 - 生产使用务必设置 token。
 - 不要把真实 token、设备 IP 写进仓库/文档（本文档用占位符）。
