@@ -32,7 +32,7 @@ M1 平台机制（建屏/承载/截帧/注入）已在 **Android 16（MIUI）免
 
 ## 遗留（关键，如实写明）
 - **M1-2 免 root 自举（ADB 客户端 + 无线调试配对）未实现**：这是"App 无需电脑/无外设即可拉起 shell 助手"的完整闭环，也是 M1-4 的 launch/capture/action 能真正生效的前提（I-3）。属于独立大块工程量。
-- 无线真机 `192.168.0.100:42215` 会话中断，Android 16 上的 M1-4 端到端（launch→frame→tap）尚未连跑；平台上各环节已分别验证。
+- 无线真机 `<host>:42215` 会话中断，Android 16 上的 M1-4 端到端（launch→frame→tap）尚未连跑；平台上各环节已分别验证。
 
 ## 建议下一步
 1. 优先落实 **M1-2（免 root 自举）**，或在开发期先用电脑 adb 驱动助手填入 `VdSession`，打通 App 的 launch→frame→action 端到端。
