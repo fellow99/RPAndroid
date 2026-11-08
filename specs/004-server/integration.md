@@ -3,6 +3,11 @@
 > 面向下游：REST / MCP / 视频流。默认端口 `8099`；token 见「鉴权」。
 > 无公网需求：局域网直连或 USB。
 
+> **术语对应（自动化服务）**：本工程产品术语统一为「**自动化服务**」。
+> 历史代码符号仍保留 `Script*` 命名（`ScriptService`/`ScriptTask`、模块 `core/script`、进程 `:node`），
+> REST 路径 `/tasks`、JS 字段 `script`、`host.invoke('script.next'|'screen.*')`、文件 `tasks.json` 等**对外契约保持不变**。
+> 即：文档中的「自动化服务 / 自动化服务任务」= 代码中的 Script / ScriptTask。
+
 ## 1. 网络接入
 
 ### 局域网（Wi-Fi）
@@ -51,7 +56,7 @@ adb reverse tcp:8099 tcp:8099
 | GET | `/frame` | 当前虚拟屏帧（PNG） |
 | POST | `/action/tap` | `{"x":..,"y":..}` |
 | POST | `/action/swipe` | `{"x1":..,"y1":..,"x2":..,"y2":..,"durMs":..}` |
-| GET | `/tasks` | 脚本任务列表 |
+| GET | `/tasks` | 自动化服务任务列表 |
 | POST | `/tasks` | 创建/更新任务（JSON） |
 | DELETE | `/tasks/{id}` | 删除任务 |
 | POST | `/tasks/{id}/run` | 立即执行任务 |
@@ -80,10 +85,10 @@ adb reverse tcp:8099 tcp:8099
 | `app_list` | 列出所有可启动的已安装应用（packageName + label） | 无 |
 | `app_launch` | 把指定 App 承载到虚拟屏 | `packageName*`，可选 `component` |
 
-#### 脚本任务
+#### 自动化服务任务
 | 工具 | 说明 | 参数（必填标 *） |
 |------|------|------------------|
-| `task_list` | 列出脚本任务 | 无 |
+| `task_list` | 列出自动化服务任务 | 无 |
 | `task_create` | 创建/更新任务 | `task*`（对象：`id,name,script,enabled,kind,intervalMs,cron`） |
 | `task_run` | 立即执行某个任务 | `id*` |
 

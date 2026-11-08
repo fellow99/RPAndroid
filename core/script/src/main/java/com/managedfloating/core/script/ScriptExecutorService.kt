@@ -1,7 +1,8 @@
 package com.managedfloating.core.script
 
 /**
- * [ScriptExecutorService] —— 脚本任务执行器（架构 E）占位。
+ * [ScriptExecutorService] —— **自动化服务**任务执行器（架构 E）占位。
+ *（符号名沿用历史 Script*，产品术语统一为「自动化服务」。）
  *
  * 后续里程碑实现：
  *  - 前台 Service：任务编排与状态机

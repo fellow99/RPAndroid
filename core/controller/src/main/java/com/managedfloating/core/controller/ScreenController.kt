@@ -3,7 +3,7 @@ package com.managedfloating.core.controller
 /**
  * [ScreenController] —— 读取与操作被托管 App 的唯一入口（架构 B）。
  *
- * 被 REST / MCP / 脚本 / 用户触摸共用。实现（[AppScreenController]）把操作委托给
+ * 被 REST / MCP / 自动化服务 / 用户触摸共用。实现（[AppScreenController]）把操作委托给
  * 免 root shell 助手（建虚拟屏 / 承载 / 注入 / 截帧），001-shell 提供底层机制。
  */
 interface ScreenController {

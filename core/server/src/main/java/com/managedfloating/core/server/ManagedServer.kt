@@ -205,7 +205,7 @@ class ManagedServer(
                     }
                 }
 
-                // 脚本任务 CRUD 与执行
+                // 自动化服务任务 CRUD 与执行
                 if (taskApi != null) {
                     get("/tasks") { call.respondText(taskApi.listJson(), ContentType.Application.Json) }
                     post("/tasks") {

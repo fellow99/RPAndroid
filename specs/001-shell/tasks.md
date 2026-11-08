@@ -29,4 +29,4 @@
 ## 遗留/后续（M1 之后，非阻塞）
 - 连接端口自动发现：`/proc/net/tcp` 在 App 内不可见（hidepid）；mDNS/扫描未命中 → 当前需提供连接端口（配对后缓存可复用）。
 - 配对 UI：目前经 `/debug/pair` 手动；正式需配置界面引导（读码可由无障碍自动）。
-- 服务前台化（Android 13+ 后台限制）、token 鉴权、MJPEG/WebRTC、MCP、脚本调度（M2–M4）。
+- 服务前台化（Android 13+ 后台限制）、token 鉴权、MJPEG/WebRTC、MCP、自动化脚本调度（M2–M4）。

@@ -4,8 +4,8 @@
 
 ## 一、架构与模块
 
-- **C-1 会话单一 & 操作单一入口**：同一时刻对被托管 App 的会话是"一块虚拟屏"；所有写操作（REST/MCP/脚本/用户触摸）必须收敛到 **ScreenController**，不逐层直连 shell。
-- **C-2 模块单一职责**：`core:shell`（托管基座）、`core:controller`（操作入口）、`core:server`（对外接口）、`core:script`（脚本执行）、`app`（UI/呈现）。模块间只经明确定义的接口通信。
+- **C-1 会话单一 & 操作单一入口**：同一时刻对被托管 App 的会话是"一块虚拟屏"；所有写操作（REST/MCP/自动化脚本/用户触摸）必须收敛到 **ScreenController**，不逐层直连 shell。
+- **C-2 模块单一职责**：`core:shell`（托管基座）、`core:controller`（操作入口）、`core:server`（对外接口）、`core:script`（自动化脚本执行）、`app`（UI/呈现）。模块间只经明确定义的接口通信。
 - **C-3 依赖单向**：`app → controller → shell`；`server → controller`；`script` 独立（经 Binder 代理）。禁止反向/循环依赖。
 
 ## 二、技术约束

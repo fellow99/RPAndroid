@@ -27,7 +27,7 @@
 
 ## 3. Functional Requirements
 - FR-C-001：系统 MUST 支持浮窗 / 常规布局 / headless 三种呈现模式。
-- FR-C-002：系统 MUST 支持模式间切换且不中断运行任务/脚本。
+- FR-C-002：系统 MUST 支持模式间切换且不中断运行任务/自动化脚本。
 - FR-C-003：用户触摸呈现画面时，系统 MUST 将触摸换算为虚拟屏坐标并回写操作。
 
 ## 4. Key Entities
@@ -43,7 +43,7 @@
 - Then 出现可拖动浮窗，触摸被回写到被托管 App
 
 ### Scenario: 无中断切换
-- Given 会话 + 脚本任务运行中
+- Given 会话 + 自动化服务任务运行中
 - When 用户从浮窗切到 headless
 - Then 任务继续运行，仅停止画面渲染
 

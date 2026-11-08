@@ -13,7 +13,7 @@
 | ABI | arm64-v8a | NDK 27.2.12479018 | Node 引擎仅此 ABI | ✅ |
 | UI | Jetpack Compose | BOM 2025.06.01 | 配置/呈现界面 | ⏳（000 用纯 View，里程碑接 Compose） |
 | AndroidX | core-ktx 1.16.0 / activity-compose 1.10.1 / lifecycle 2.9.0 | — | 基础 | ✅（部分） |
-| Node 嵌入 | `io.github.fellow99:node-bridge` | 0.2.0 | JS 脚本执行器 embed API | ✅（依赖） |
+| Node 嵌入 | `io.github.fellow99:node-bridge` | 0.2.0 | JS 自动化服务执行器 embed API | ✅（依赖） |
 | Node 引擎 | `io.github.fellow99:node-runtime` | 26.13.0（runtimeOnly） | libnode.so（arm64） | ✅（依赖+进 APK） |
 | HTTP 服务 | Ktor | 待定 | REST / MCP / 视频 | ⏳ |
 | MCP | MCP SDK（SSE / streamable HTTP） | 待定 | agent 工具接入 | ⏳ |

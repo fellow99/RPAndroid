@@ -8,8 +8,8 @@ import java.io.File
 enum class ScheduleKind { IMMEDIATE, INTERVAL, CRON }
 
 /**
- * [ScriptTask] —— 一个脚本任务。
- * @param script JS 脚本内容（可调用宿主能力 host.invoke('screen.tap', {...})）
+ * [ScriptTask] —— 一个**自动化服务**任务（符号名沿用历史 ScriptTask）。
+ * @param script 自动化逻辑的 JS 脚本内容（可调用宿主能力 host.invoke('screen.tap', {...})）
  * @param packageName 目标 App（可选；用于任务前自动承载）
  */
 data class ScriptTask(

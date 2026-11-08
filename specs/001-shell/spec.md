@@ -16,7 +16,7 @@
 
 ### 1.3 Scope
 - 建虚拟屏 / 启动与挪入 App / 输入注入 / 帧出口 / 方向与焦点处理。
-- 不含：操作语义（属 controller）、对外协议（属 server）、脚本（属 script）。
+- 不含：操作语义（属 controller）、对外协议（属 server）、自动化脚本（属 script）。
 
 ## 2. User Stories
 - 作为系统，我可以创建一块自有虚拟屏并承载指定 App（FR-A-001）。

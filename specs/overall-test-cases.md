@@ -9,7 +9,7 @@
 | U 单元 | 纯逻辑（坐标换算、调度语义、序列化） | JVM |
 | I 集成 | 跨模块链路（shell→controller→server） | 真机 |
 | E 接口 | REST / MCP 对 localhost / adb reverse 回归 | 真机+电脑 |
-| S 脚本 | Node 执行器冒烟（host.invoke 回环） | 真机 |
+| S 自动化脚本 | Node 执行器冒烟（host.invoke 回环） | 真机 |
 | B 构建 | 编译/打包/依赖入包 | 本地 |
 
 ## 模块测试用例编号约定

@@ -4,7 +4,7 @@
 
 ## 架构总览
 
-ManagedFloatingApp 是 Android 上的 **App 托管与自动化控制服务**。核心模型：**单一"被托管 App 会话" = 一块虚拟屏（VirtualDisplay）**。所有"看到什么、操作什么"都收敛到这块屏；上层（呈现模式 / REST / MCP / 视频流 / JS 脚本）共用同一个 ScreenController 作为唯一操作入口。
+ManagedFloatingApp 是 Android 上的 **App 托管与自动化控制服务**。核心模型：**单一"被托管 App 会话" = 一块虚拟屏（VirtualDisplay）**。所有"看到什么、操作什么"都收敛到这块屏；上层（呈现模式 / REST / MCP / 视频流 / JS 自动化脚本）共用同一个 ScreenController 作为唯一操作入口。
 
 ```
 ┌────────────── ManagedFloatingApp (Android, arm64) ──────────────┐
@@ -22,7 +22,7 @@ ManagedFloatingApp 是 Android 上的 **App 托管与自动化控制服务**。�
 │  D. core:server   REST API / MCP server / 视频流 (复用 B)       │
 │  E. core:script   ScriptExecutorService + Node(:node 进程)      │
 │     - host.register 代理 → 主进程 ScreenController               │
-│  F. app(配置UI)   选App/任务/开关/时间/脚本/状态日志              │
+│  F. app(配置UI)   选App/任务/开关/时间/自动化脚本/状态日志              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -37,9 +37,9 @@ app ──▶ core:controller ──▶ core:shell
 呈现模式（app 内）与对外接口（server）都只依赖 ScreenController，不直接触碰 shell。
 
 ### 主数据流
-1. **读取路径**：虚拟屏帧（shell）→ ImageReader（app 进程）→ ScreenController → **呈现模式渲染** 与 **视频流/截图**；无障碍读控件树 → ScreenController → **元素列表**（REST/MCP/脚本消费）。
-2. **写入路径**：REST/MCP/脚本/用户触摸 → ScreenController 坐标/动作 → 输入注入（shell）→ 虚拟屏上的目标 App。
-3. **脚本路径**：ScriptExecutorService（主进程）→ Node 宿主能力（`host.invoke`，经 Binder 代理）→ ScreenController → 虚拟屏；执行状态/结果回传。
+1. **读取路径**：虚拟屏帧（shell）→ ImageReader（app 进程）→ ScreenController → **呈现模式渲染** 与 **视频流/截图**；无障碍读控件树 → ScreenController → **元素列表**（REST/MCP/自动化脚本消费）。
+2. **写入路径**：REST/MCP/自动化脚本/用户触摸 → ScreenController 坐标/动作 → 输入注入（shell）→ 虚拟屏上的目标 App。
+3. **自动化服务路径**：ScriptExecutorService（主进程）→ Node 宿主能力（`host.invoke`，经 Binder 代理）→ ScreenController → 虚拟屏；执行状态/结果回传。
 
 ### 进程边界
 | 进程 | 内容 | 原因 |
@@ -55,7 +55,7 @@ app ──▶ core:controller ──▶ core:shell
 | A-1 | 免 root：无线调试配对 + 内置 shell 助手 | root | 不要求用户 root；root 可作可选加速 |
 | A-2 | 独立 VirtualDisplay 承载目标 App | MediaProjection | 唯一能"在自有窗口里承载并操作任意 App"的可行路径 |
 | A-3 | ScreenController 作为唯一写入口 | 各层直连 shell | 收敛一致性（用户触摸与远程 agent 看到/操作同一实例） |
-| A-4 | 单一会话 = 一块虚拟屏，多呈现模式 | 每模式建屏 | 模式切换不中断正在运行的任务/脚本 |
+| A-4 | 单一会话 = 一块虚拟屏，多呈现模式 | 每模式建屏 | 模式切换不中断正在运行的任务/自动化脚本 |
 | A-5 | Node 独立 `:node` 进程 | 同进程 | 崩溃隔离 + 可重启（node 引擎约束） |
 
 ## 跨模块关注点

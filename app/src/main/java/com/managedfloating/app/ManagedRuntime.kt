@@ -23,7 +23,7 @@ object ManagedRuntime {
 
     @Synchronized
     fun start(context: Context) {
-        // Application.onCreate 在每个进程都会跑；:node 进程只跑脚本，不启动 REST 服务器。
+        // Application.onCreate 在每个进程都会跑；:node 进程只跑自动化服务，不启动 REST 服务器。
         if (currentProcessName(context) != context.packageName) return
         if (started) return
         started = true

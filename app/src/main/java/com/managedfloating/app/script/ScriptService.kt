@@ -25,9 +25,10 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * [ScriptService] —— 脚本执行器（独立 `:node` 进程，前台服务）。
+ * [ScriptService] —— **自动化服务**执行器（独立 `:node` 进程，前台服务）。
  *
- * Node 常驻（`node::Start` 每进程一次）：appEntry 为 `runner.js`，循环向宿主拉取待执行脚本并 eval。
+ * 注：类名沿用历史符号 `ScriptService`，产品术语统一称为「自动化服务」。
+ * Node 常驻（`node::Start` 每进程一次）：appEntry 为 `runner.js`，循环向宿主拉取待执行的自动化任务（JS）并 eval。
  * 宿主能力 `screen.*` 经 [IScreenControl] Binder 回调主进程的 ScreenController。
  * Node 崩溃不影响主进程（进程隔离）；服务重启后重新拉起 Node。
  */
@@ -62,7 +63,7 @@ class ScriptService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val taskId = intent?.getStringExtra(EXTRA_TASK_ID)
         if (taskId != null) {
-            // 从 TaskStore 读取任务脚本
+            // 从 TaskStore 读取自动化任务
             val store = TaskStore(storeFile())
             val task = store.get(taskId)
             if (task != null) {
@@ -150,11 +151,11 @@ class ScriptService : Service() {
 
     private fun startForegroundCompat() {
         val nm = getSystemService(NotificationManager::class.java)
-        val ch = NotificationChannel(CHANNEL, "脚本执行", NotificationManager.IMPORTANCE_LOW)
+        val ch = NotificationChannel(CHANNEL, "自动化服务", NotificationManager.IMPORTANCE_LOW)
         nm.createNotificationChannel(ch)
         val n: Notification = Notification.Builder(this, CHANNEL)
-            .setContentTitle("ManagedFloatingApp 脚本")
-            .setContentText("脚本执行器运行中")
+            .setContentTitle("ManagedFloatingApp 自动化服务")
+            .setContentText("自动化服务运行中")
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .build()
         if (Build.VERSION.SDK_INT >= 34) {
@@ -183,7 +184,7 @@ class ScriptService : Service() {
             if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i) else ctx.startService(i)
         }
 
-        /** Node 侧常驻 runner：循环拉取脚本并 eval。 */
+        /** Node 侧常驻 runner：循环拉取自动化任务（JS）并 eval。 */
         private val RUNNER_JS = """
             'use strict';
             const host = require('./host.js');

@@ -107,12 +107,12 @@ class McpServer(
             listOf("packageName"),
         )
         if (taskApi != null) {
-            tool("task_list", "List script tasks", JSONObject(), emptyList())
+            tool("task_list", "List automation-service tasks", JSONObject(), emptyList())
             tool(
-                "task_create", "Create/update a script task (JSON: id,name,script,enabled,kind,intervalMs,cron)",
+                "task_create", "Create/update an automation-service task (JSON: id,name,script,enabled,kind,intervalMs,cron)",
                 JSONObject().put("task", prop("object", "task object")), listOf("task"),
             )
-            tool("task_run", "Run a task now", JSONObject().put("id", prop("string", "task id")), listOf("id"))
+            tool("task_run", "Run an automation-service task now", JSONObject().put("id", prop("string", "task id")), listOf("id"))
         }
         return arr
     }

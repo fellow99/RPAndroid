@@ -30,7 +30,7 @@
 | **M0 000-scaffold** | 工程骨架 + 模块占位 + node 引擎入包 | 可编译；APK 含 libnode* |
 | M1 托管 POC | 免 root 无线调试配对 + shell 助手建虚拟屏 + 启动 App + 截图 + 注入点击（headless + REST 最小集） | 真机可跑通一条链路 |
 | M2 呈现与操作 | 浮窗/常规/headless 三模式；触摸回写；token 鉴权；会话自动恢复 | ✅ **已完成**（真机验证 /frame PNG、token 401/200） |
-| M3 脚本任务 | ScriptService(:node 进程) + NodeRuntime + IScreenControl Binder + 立即/间隔/cron | ✅ **已完成**（JS 执行并操作虚拟屏，INTERVAL 8s 自动触发） |
+| M3 自动化服务任务 | ScriptService(:node 进程) + NodeRuntime + IScreenControl Binder + 立即/间隔/cron | ✅ **已完成**（JS 执行并操作虚拟屏，INTERVAL 8s 自动触发） |
 | M4 对外协议 | MCP(SSE) + MJPEG 视频流 + adb reverse 接入 | agent/外部系统可调用 |
 | M5 打磨 | 状态/日志、错误恢复、低版本门控、文档完善 | 稳定可用 |
 
@@ -46,7 +46,7 @@
 - **单元**：纯逻辑（坐标换算、调度语义、序列化）JVM 单测。
 - **集成**：真机 M1/POC 验证"建屏→启动→截图→注入"链路。
 - **接口**：REST/MCP 用 curl / MCP 客户端对 localhost/adb reverse 地址回归。
-- **脚本**：node 执行器冒烟（host.invoke 回环）。
+- **自动化脚本**：node 执行器冒烟（host.invoke 回环）。
 - 详见 `overall-test-cases.md`。
 
 ## 6. 部署策略

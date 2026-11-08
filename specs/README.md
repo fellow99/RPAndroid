@@ -16,7 +16,7 @@
 | 整体 | 整体规格文档 | 4 | overall-spec / plan / data-model / test-cases |
 | 模块 | 托管与控制 | 4 | 001-shell、002-controller（各 spec+plan） |
 | 模块 | 呈现与服务 | 4 | 003-presentation、004-server（各 spec+plan） |
-| 模块 | 脚本与界面 | 4 | 005-script、006-config-ui（各 spec+plan） |
+| 模块 | 自动化脚本与界面 | 4 | 005-script、006-config-ui（各 spec+plan） |
 | **合计** | **6 目录 / 22 文件** | | |
 
 > 注：按要求不生成 API.md / overall-api.md（REST/MCP 契约在 004-server 文档内描述）。
@@ -62,7 +62,7 @@
 
 ### 002 — 操作入口（controller）
 
-> 读取与操作被托管 App 的唯一入口 ScreenController（REST/MCP/脚本/触摸共用）。
+> 读取与操作被托管 App 的唯一入口 ScreenController（REST/MCP/自动化脚本/触摸共用）。
 
 | 文档 | 链接 | 说明 |
 |------|------|------|
@@ -93,20 +93,20 @@
 
 ---
 
-## 五、脚本与界面（005–006）
+## 五、自动化脚本与界面（005–006）
 
-### 005 — 脚本任务（script）
+### 005 — 自动化服务任务（script）
 
-> 前台 Service + Node（独立 `:node` 进程）执行 JS 脚本；立即/间隔/cron 调度。
+> 前台 Service + Node（独立 `:node` 进程）执行 JS 自动化脚本；立即/间隔/cron 调度。
 
 | 文档 | 链接 | 说明 |
 |------|------|------|
-| 功能规格 | [005-script/spec.md](./005-script/spec.md) | 脚本任务功能需求（FR-E） |
+| 功能规格 | [005-script/spec.md](./005-script/spec.md) | 自动化服务任务功能需求（FR-E） |
 | 技术方案 | [005-script/plan.md](./005-script/plan.md) | node-bridge 集成与调度实现方案 |
 
 ### 006 — 配置界面（config-ui）
 
-> 选择被托管 App、配置任务/脚本/调度、切换呈现模式、查看状态与日志。
+> 选择被托管 App、配置任务/自动化脚本/调度、切换呈现模式、查看状态与日志。
 
 | 文档 | 链接 | 说明 |
 |------|------|------|
@@ -123,8 +123,8 @@
 | 002 | 操作入口 | controller | 托管与控制 |
 | 003 | 呈现模式 | presentation | 呈现与服务 |
 | 004 | 对外接口 | server | 呈现与服务 |
-| 005 | 脚本任务 | script | 脚本与界面 |
-| 006 | 配置界面 | config-ui | 脚本与界面 |
+| 005 | 自动化服务任务 | script | 自动化脚本与界面 |
+| 006 | 配置界面 | config-ui | 自动化脚本与界面 |
 
 > 注：无跳号。
 
@@ -150,7 +150,7 @@
 | **新加入开发者** | constitution.md → STRUCTURE.md → overall-spec.md → 具体模块 spec.md |
 | **架构师 / Tech Lead** | ARCHITECTURE.md → TECH.md → overall-plan.md |
 | **Android 开发** | STRUCTURE.md → 对应模块 spec.md + plan.md |
-| **脚本/自动化开发** | 005-script/spec.md + plan.md → 004-server/spec.md |
+| **自动化脚本/自动化开发** | 005-script/spec.md + plan.md → 004-server/spec.md |
 | **测试 / QA** | overall-test-cases.md → SPECS_CHECKLIST.md |
 | **产品经理** | overall-spec.md → 对应模块 spec.md |
 

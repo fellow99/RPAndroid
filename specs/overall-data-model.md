@@ -19,12 +19,12 @@
 Idle → Starting → Running ⇄ Paused → Terminated
 ```
 
-### Task（脚本任务）
+### Task（自动化服务任务）
 | 属性 | 类型 | 说明 |
 |------|------|------|
 | id | String | 任务 id |
 | packageName | String | 目标 App（可为空=当前会话） |
-| script | String | JS 脚本内容或引用 |
+| script | String | JS 自动化脚本内容或引用 |
 | enabled | Boolean | 是否启用 |
 | schedule | Schedule | 执行方式 |
 | lastRunAt / nextRunAt | Long? | 执行时间 |
@@ -53,7 +53,7 @@ Idle → Starting → Running ⇄ Paused → Terminated
 | timestamp | Long | 时间 |
 | detail | String? | 说明 |
 
-### ScriptRunRecord（脚本运行记录）
+### ScriptRunRecord（自动化脚本运行记录）
 | 属性 | 类型 | 说明 |
 |------|------|------|
 | taskId | String | 所属任务 |

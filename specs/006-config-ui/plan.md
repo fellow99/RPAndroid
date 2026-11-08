@@ -26,7 +26,7 @@
 ## 5. Interface Contracts
 ### 5.1 Consumed
 - App 配置（默认呈现模式、端口、token 开关）。
-- 任务/脚本/调度能力（core:script）。
+- 任务/自动化脚本/调度能力（core:script）。
 - 会话与状态（core:controller + core:shell）。
 
 ## 6. Implementation Strategy

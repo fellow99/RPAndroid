@@ -10,7 +10,7 @@ import com.managedfloating.core.shell.NoRootShell
 /**
  * 主进程服务：
  * - 承载 REST 服务器（委托 ManagedRuntime，幂等）；
- * - 通过 [IScreenControl] 向 :node 进程（脚本执行器）暴露屏幕控制。
+ * - 通过 [IScreenControl] 向 :node 进程（自动化服务执行器）暴露屏幕控制。
  */
 class ManagedService : Service() {
 
