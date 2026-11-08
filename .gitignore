@@ -25,6 +25,9 @@ logs/**/*.log
 *.jks
 *.env
 
+# pi client/harness local config（含本机会话 token/IP，不入库）
+.pi/
+
 tools/vdisplay/out/
 *.class
 *.dex

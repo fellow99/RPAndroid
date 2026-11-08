@@ -1,7 +1,7 @@
 # MCP 工具 ManagedFloatingApp —— 完整测试报告
 
 设备：Xiaomi M2105K81C / Android 13 (SDK33) / MIUI / arm64 / 免 root
-传输：adb forward tcp:8099；鉴权 Authorization: Bearer s3cret
+传输：adb forward tcp:8099；鉴权 Authorization: Bearer <token>
 
 ## 一、发现并修复的 3 个真实缺陷
 

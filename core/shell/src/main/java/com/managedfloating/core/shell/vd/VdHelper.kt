@@ -175,15 +175,6 @@ object VdHelper {
         }
     }
 
-    private fun readFully(input: java.io.InputStream, buf: ByteArray) {
-        var off = 0
-        while (off < buf.size) {
-            val r = input.read(buf, off, buf.size - off)
-            if (r < 0) throw java.io.IOException("socket eof")
-            off += r
-        }
-    }
-
     private fun newDisplayManager(): DisplayManager {
         return try {
             val thread = Class.forName("android.app.ActivityThread").getMethod("systemMain").invoke(null)

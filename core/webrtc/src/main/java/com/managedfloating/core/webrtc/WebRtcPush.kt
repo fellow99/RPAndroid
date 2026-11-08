@@ -72,39 +72,47 @@ class WebRtcPush(
         val session = PeerSession(this)
         if (!session.create()) return null
         peers.add(session)
+        // 仅在确有在线 peer 时才跑推流（避免 0 peer 时持续编码占 CPU）
+        pusher.start()
         return session
     }
 
     private fun ensureInitialized(): Boolean {
-        return try {
-            PeerConnectionFactory.initialize(
-                PeerConnectionFactory.InitializationOptions.builder(context.applicationContext)
-                    .setEnableInternalTracer(false)
-                    .createInitializationOptions()
-            )
-            // 显式建 EglBase + 编解码工厂：builder 默认的 RootEglBase 在部分 ROM 上 EGL 上下文创建失败，
-            // 会得到“Failed to set local/remote video description … send/recv parameters”的空 codec 协商。
-            val egl = org.webrtc.EglBase.create(null, org.webrtc.EglBase.CONFIG_RGBA)
-            val encoderFactory = org.webrtc.DefaultVideoEncoderFactory(egl.eglBaseContext, true, true)
-            val decoderFactory = org.webrtc.DefaultVideoDecoderFactory(egl.eglBaseContext)
-            android.util.Log.i(TAG, "enc codecs=" + encoderFactory.supportedCodecs.joinToString { it.name })
-            android.util.Log.i(TAG, "dec codecs=" + decoderFactory.supportedCodecs.joinToString { it.name })
-            val f = PeerConnectionFactory.builder()
-                .setVideoEncoderFactory(encoderFactory)
-                .setVideoDecoderFactory(decoderFactory)
-                .createPeerConnectionFactory()
-            val s = f.createVideoSource(false)
-            val t = f.createVideoTrack(TRACK_ID, s)
-            eglBase = egl
-            factory = f
-            source = s
-            track = t
-            pusher.start()
-            android.util.Log.i(TAG, "initialized peer connection factory")
-            true
-        } catch (t: Throwable) {
-            android.util.Log.e(TAG, "webrtc init failed", t)
-            false
+        return synchronized(this) {
+            if (factory != null) return@synchronized true
+            try {
+                // PeerConnectionFactory.initialize 全局仅能一次；stop() 后重建 factory 不能重复 initialize
+                if (!globalInitDone) {
+                    PeerConnectionFactory.initialize(
+                        PeerConnectionFactory.InitializationOptions.builder(context.applicationContext)
+                            .setEnableInternalTracer(false)
+                            .createInitializationOptions()
+                    )
+                    globalInitDone = true
+                }
+                // 显式建 EglBase + 编解码工厂：builder 默认的 RootEglBase 在部分 ROM 上 EGL 上下文创建失败，
+                // 会得到“Failed to set local/remote video description … send/recv parameters”的空 codec 协商。
+                val egl = org.webrtc.EglBase.create(null, org.webrtc.EglBase.CONFIG_RGBA)
+                val encoderFactory = org.webrtc.DefaultVideoEncoderFactory(egl.eglBaseContext, true, true)
+                val decoderFactory = org.webrtc.DefaultVideoDecoderFactory(egl.eglBaseContext)
+                android.util.Log.i(TAG, "enc codecs=" + encoderFactory.supportedCodecs.joinToString { it.name })
+                android.util.Log.i(TAG, "dec codecs=" + decoderFactory.supportedCodecs.joinToString { it.name })
+                val f = PeerConnectionFactory.builder()
+                    .setVideoEncoderFactory(encoderFactory)
+                    .setVideoDecoderFactory(decoderFactory)
+                    .createPeerConnectionFactory()
+                val s = f.createVideoSource(false)
+                val t = f.createVideoTrack(TRACK_ID, s)
+                eglBase = egl
+                factory = f
+                source = s
+                track = t
+                android.util.Log.i(TAG, "initialized peer connection factory")
+                true
+            } catch (t: Throwable) {
+                android.util.Log.e(TAG, "webrtc init failed", t)
+                false
+            }
         }
     }
 
@@ -275,6 +283,9 @@ class WebRtcPush(
         private const val STREAM_ID = "mfa-stream-0"
         private const val DATA_CHANNEL_INPUT = "input"
         const val MAX_PEERS = 2
+
+        /** PeerConnectionFactory.initialize 全局仅一次（进程级）。 */
+        @Volatile private var globalInitDone = false
     }
 }
 

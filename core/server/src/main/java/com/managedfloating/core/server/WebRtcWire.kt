@@ -128,14 +128,14 @@ object WebRtcWire {
         try {
             when (node.get("t")?.asText()) {
                 "tap" -> controller.tap(
-                    (clamp01(node.get("nx")?.asDouble()) * w).toInt(),
-                    (clamp01(node.get("ny")?.asDouble()) * h).toInt(),
+                    px(node.get("nx")?.asDouble(), w - 1),
+                    px(node.get("ny")?.asDouble(), h - 1),
                 )
                 "swipe" -> controller.swipe(
-                    (clamp01(node.get("nx1")?.asDouble()) * w).toInt(),
-                    (clamp01(node.get("ny1")?.asDouble()) * h).toInt(),
-                    (clamp01(node.get("nx2")?.asDouble()) * w).toInt(),
-                    (clamp01(node.get("ny2")?.asDouble()) * h).toInt(),
+                    px(node.get("nx1")?.asDouble(), w - 1),
+                    px(node.get("ny1")?.asDouble(), h - 1),
+                    px(node.get("nx2")?.asDouble(), w - 1),
+                    px(node.get("ny2")?.asDouble(), h - 1),
                     (node.get("durMs")?.asInt() ?: 300),
                 )
                 "key" -> controller.pressKey(node.get("code")?.asInt() ?: 0)
@@ -146,5 +146,7 @@ object WebRtcWire {
         }
     }
 
-    private fun clamp01(v: Double?): Double = (v ?: 0.0).coerceIn(0.0, 1.0)
+    /** 归一化 0..1 → 虚拟屏像素（钳制在 [0, maxInclusive]，避免注入到 w/h 越界一像素）。 */
+    private fun px(v: Double?, maxInclusive: Int): Int =
+        ((v ?: 0.0).coerceIn(0.0, 1.0) * maxInclusive).toInt().coerceIn(0, maxInclusive)
 }
