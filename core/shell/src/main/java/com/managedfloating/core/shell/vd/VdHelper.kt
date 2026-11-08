@@ -57,7 +57,9 @@ object VdHelper {
         Looper.prepareMainLooper()
 
         val sdk = android.os.Build.VERSION.SDK_INT
-        var flags = FLAG_PUBLIC or FLAG_OWN_CONTENT_ONLY or FLAG_SUPPORTS_TOUCH or
+        // 注意：不使用 FLAG_PUBLIC——公开虚拟屏会被系统当作投屏/演示屏，从而触发
+        // 系统级 mForceHideNonSystemOverlayWindow，导致应用的悬浮窗(浮窗呈现)被隐藏。
+        var flags = FLAG_OWN_CONTENT_ONLY or FLAG_SUPPORTS_TOUCH or
             FLAG_ROTATES_WITH_CONTENT or FLAG_DESTROY_CONTENT_ON_REMOVAL or FLAG_TOUCH_FEEDBACK_DISABLED
         if (sdk >= 33) {
             flags = flags or FLAG_TRUSTED or FLAG_OWN_DISPLAY_GROUP or FLAG_ALWAYS_UNLOCKED
@@ -69,7 +71,7 @@ object VdHelper {
         val vd: VirtualDisplay = try {
             dm.createVirtualDisplay("mfa-agent", w, h, dpi, reader.surface, flags)
         } catch (e: SecurityException) {
-            val f2 = FLAG_PUBLIC or FLAG_OWN_CONTENT_ONLY or FLAG_SUPPORTS_TOUCH or
+            val f2 = FLAG_OWN_CONTENT_ONLY or FLAG_SUPPORTS_TOUCH or
                 FLAG_ROTATES_WITH_CONTENT or FLAG_DESTROY_CONTENT_ON_REMOVAL or FLAG_TOUCH_FEEDBACK_DISABLED
             dm.createVirtualDisplay("mfa-agent", w, h, dpi, reader.surface, f2)
         }
