@@ -50,13 +50,18 @@ object ManagedRuntime {
         )
         server = s
         s.start()
-        // 自动恢复上次会话（App 被系统回收重启后仍可用）
+        // 自动恢复上次会话（App 被系统回收重启后仍可用）——使用设置中的虚拟屏分辨率
+        // （与手动"连接并建立会话"一致；分辨率未初始化时以当前屏幕为准，避免 0×0 建屏）
         val savedPort = cfg.connectPort
         if (savedPort in 1..65535) {
+            val dm = app.resources.displayMetrics
+            val w = cfg.vScreenWidth.takeIf { it > 0 } ?: dm.widthPixels
+            val h = cfg.vScreenHeight.takeIf { it > 0 } ?: dm.heightPixels
+            val d = cfg.vScreenDpi.takeIf { it > 0 } ?: dm.densityDpi
             Thread {
-                runCatching { startSession(savedPort) }.onSuccess { ok ->
+                runCatching { startSession(savedPort, w, h, d) }.onSuccess { ok ->
                     com.managedfloating.core.server.MfaLog.i(
-                        "Runtime", "auto-resume session port=$savedPort ok=$ok")
+                        "Runtime", "auto-resume session port=$savedPort ${w}x$h dpi=$d ok=$ok")
                 }
             }.apply { name = "mfa-resume"; isDaemon = true }.start()
         }
