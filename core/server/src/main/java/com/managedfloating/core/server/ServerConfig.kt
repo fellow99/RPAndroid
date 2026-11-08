@@ -24,11 +24,29 @@ class ServerConfig(context: Context) {
         get() = prefs.getInt(KEY_CONNECT_PORT, 0)
         set(v) = prefs.edit().putInt(KEY_CONNECT_PORT, v).apply()
 
+    /** 虚拟屏宽度（默认 0 = 首次按当前屏幕初始化）。 */
+    var vScreenWidth: Int
+        get() = prefs.getInt(KEY_VW, 0)
+        set(v) = prefs.edit().putInt(KEY_VW, v).apply()
+
+    /** 虚拟屏高度。 */
+    var vScreenHeight: Int
+        get() = prefs.getInt(KEY_VH, 0)
+        set(v) = prefs.edit().putInt(KEY_VH, v).apply()
+
+    /** 虚拟屏 dpi。 */
+    var vScreenDpi: Int
+        get() = prefs.getInt(KEY_VD, 0)
+        set(v) = prefs.edit().putInt(KEY_VD, v).apply()
+
     companion object {
         const val DEFAULT_PORT = 8099
         private const val KEY_PORT = "port"
         private const val KEY_TOKEN = "auth_token"
         private const val KEY_CONNECT_PORT = "connect_port"
+        private const val KEY_VW = "v_screen_w"
+        private const val KEY_VH = "v_screen_h"
+        private const val KEY_VD = "v_screen_dpi"
 
         /** 请求头名。 */
         const val HEADER = "X-Auth-Token"

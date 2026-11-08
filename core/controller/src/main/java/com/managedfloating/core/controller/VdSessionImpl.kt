@@ -128,6 +128,8 @@ class VdSessionImpl(
     override fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durMs: Int): Boolean =
         command("swipe", x1.toString(), y1.toString(), x2.toString(), y2.toString(), durMs.toString()) != null
 
+    override fun pressKey(keyCode: Int): Boolean = command("key", keyCode.toString()) != null
+
     private fun resolveLauncher(pkg: String): String? {
         val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(pkg)
         val ri = pm.queryIntentActivities(i, 0).firstOrNull() ?: return null

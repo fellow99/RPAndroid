@@ -71,6 +71,13 @@ class AppScreenController(private val context: Context) : ScreenController {
         return try { s.swipe(x1, y1, x2, y2, durMs) } catch (e: Exception) { false }
     }
 
+    override fun back(): Boolean = pressKey(android.view.KeyEvent.KEYCODE_BACK)
+
+    override fun pressKey(keyCode: Int): Boolean {
+        val s = vdSession ?: return false
+        return try { s.pressKey(keyCode) } catch (e: Exception) { false }
+    }
+
     override fun readUi(): String? = runCatching { uiReader?.invoke() }.getOrNull()
 
     override fun isSessionActive(): Boolean = vdSession != null
@@ -94,4 +101,5 @@ interface VdSession {
     fun captureFrame(): ByteArray?
     fun tap(x: Int, y: Int): Boolean
     fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durMs: Int): Boolean
+    fun pressKey(keyCode: Int): Boolean
 }

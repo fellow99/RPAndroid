@@ -173,6 +173,21 @@ class ScriptService : Service() {
         const val EXTRA_TASK_ID = "task_id"
         private const val CHANNEL = "mfa_script"
 
+        /** 停止信号目录（与 runner.js 的相对路径 __dirname/../../mfa-stop 对应）。 */
+        private fun stopFlagFile(ctx: Context, taskId: String): File {
+            val files = File(ctx.applicationInfo.dataDir, "files")
+            return File(files, "mfa-stop/${taskId}.flag")
+        }
+
+        /** 请求 :node 进程中止某任务的当前执行（写停止信号文件；主进程侧调用）。 */
+        fun requestStop(ctx: Context, taskId: String) {
+            runCatching {
+                val f = stopFlagFile(ctx, taskId)
+                f.parentFile?.mkdirs()
+                f.writeText("stop")
+            }
+        }
+
         /** 请求 :node 进程执行一个任务（由主进程调度器调用）。 */
         fun runTask(ctx: Context, taskId: String) {
             val i = Intent(ctx, ScriptService::class.java).putExtra(EXTRA_TASK_ID, taskId)
@@ -184,21 +199,57 @@ class ScriptService : Service() {
             if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i) else ctx.startService(i)
         }
 
-        /** Node 侧常驻 runner：循环拉取自动化任务（JS）并 eval。 */
+        /** Node 侧常驻 runner：循环拉取自动化任务（JS）并 eval。
+         * 支持停止信号：主进程写 filesDir/mfa-stop/<taskId>.flag，runner 在拉取到任务后及每次
+         * `host.invoke` 前检查，命中则中止当前脚本并上报 cancelled（尽力而为，无法硬中断同步长任务）。 */
         private val RUNNER_JS = """
             'use strict';
             const host = require('./host.js');
+            const fs = require('fs');
+            const path = require('path');
+            const STOP_DIR = path.join(__dirname, '..', '..', 'mfa-stop');
+            let currentTaskId = null;
+
+            function stopRequested() {
+              if (!currentTaskId) return false;
+              try { return fs.existsSync(path.join(STOP_DIR, currentTaskId + '.flag')); } catch (e) { return false; }
+            }
+            function clearStop() {
+              if (!currentTaskId) return;
+              try { fs.unlinkSync(path.join(STOP_DIR, currentTaskId + '.flag')); } catch (e) {}
+            }
+
+            const hosted = {};
+            for (const k of Object.keys(host)) hosted[k] = host[k];
+            const guardedInvoke = async (api, args) => {
+              if (stopRequested()) { throw new Error('cancelled by user'); }
+              return await host.invoke(api, args);
+            };
+            const hostProxy = new Proxy(hosted, {
+              get(t, prop) {
+                if (prop === 'invoke') return guardedInvoke;
+                return t[prop];
+              },
+            });
+
             (async () => {
               for (;;) {
                 try {
                   const r = await host.invoke('script.next', {});
                   if (r && r.script) {
-                    try {
-                      await (new Function('host', 'return (async()=>{' + r.script + '})()'))(host);
-                      await host.invoke('script.done', { taskId: r.taskId, ok: true });
-                    } catch (e) {
-                      await host.invoke('script.done', { taskId: r.taskId, ok: false, error: String(e) });
+                    currentTaskId = r.taskId;
+                    if (!stopRequested()) {
+                      try {
+                        await (new Function('host', 'return (async()=>{' + r.script + '})()'))(hostProxy);
+                        await host.invoke('script.done', { taskId: r.taskId, ok: true });
+                      } catch (e) {
+                        await host.invoke('script.done', { taskId: r.taskId, ok: false, error: String(e) });
+                      }
+                    } else {
+                      await host.invoke('script.done', { taskId: r.taskId, ok: false, error: 'cancelled by user' });
                     }
+                    clearStop();
+                    currentTaskId = null;
                   }
                 } catch (e) { /* ignore */ }
                 await new Promise(res => setTimeout(res, 200));

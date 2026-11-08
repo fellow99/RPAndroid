@@ -45,6 +45,12 @@ class TaskScheduler(private val ctx: Context) {
         if (next > 0) scheduleAt(t.copy(nextRunAt = next), next)
     }
 
+    /** 停止某任务：取消已排闹钟 + 写停止信号中止 :node 当前执行（尽力而为）。 */
+    fun stop(taskId: String) {
+        cancel(taskId)
+        ScriptService.requestStop(ctx, taskId)
+    }
+
     private fun scheduleAt(task: ScriptTask, atMs: Long) {
         val pi = pendingIntent(task.id, PendingIntent.FLAG_UPDATE_CURRENT) ?: return
         try {
