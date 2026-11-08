@@ -204,6 +204,11 @@ class ScriptService : Service() {
             }.getOrNull().also { runCatching { f.delete() } }
         }
 
+        /** 删除某任务残留的结果文件（开始新一次执行前去重，供 TaskRuntime.begin 使用）。 */
+        fun clearRunOutcome(ctx: Context, taskId: String) {
+            runCatching { runOutcomeFile(ctx, taskId).delete() }
+        }
+
         /** 请求 :node 进程执行一个任务（由主进程调度器调用）。 */
         fun runTask(ctx: Context, taskId: String) {
             val i = Intent(ctx, ScriptService::class.java).putExtra(EXTRA_TASK_ID, taskId)

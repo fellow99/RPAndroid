@@ -17,6 +17,8 @@ import java.io.File
  *   `PresentationHub.runningTaskId`，但服务端（`/status`）可读，供 /client 展示执行状态。
  * - 内置 watchdog：运行中轮询 `:node` 结果文件（`mfa-run/<id>.json`），完成后把
  *   `lastStatus` 回写进 TaskStore 并清空 runningTaskId（原来只有 App UI 轮询才回写）。
+ * - [begin] 前会清除该任务此前遗留的（未被消费的）结果文件，避免 watchdog 把旧结果
+ *   误判为"本次运行已完成"而立刻清掉执行状态（008 联调 bug 修复）。
  *
  * 注：App UI（AutomationScreen）仍用 PresentationHub 做进程内互斥，两边各自互斥（008 已知限制）；
  * 08 client 侧以本对象为服务端权威。
@@ -45,6 +47,8 @@ object TaskRuntime {
     @Synchronized
     fun begin(taskId: String): Boolean {
         if (runningTaskId != null) return false
+        // 清掉该任务此前遗留的（未被消费的）结果文件，避免 watchdog 误把旧结果当作本次运行完成。
+        ctxRef?.let { ScriptService.clearRunOutcome(it, taskId) }
         runningTaskId = taskId
         ensureWatchdog()
         return true
