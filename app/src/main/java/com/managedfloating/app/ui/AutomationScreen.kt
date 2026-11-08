@@ -119,10 +119,13 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
             !sessionActive -> ConnectContent(connecting, message, onConnect = {
                 connecting = true
                 message = "正在连接 adbd 并拉起助手…"
+                // 分辨率缺省时以当前屏幕为准（防止 0×0 建屏失败）
+                val dm = context.resources.displayMetrics
+                val w = cfg.vScreenWidth.takeIf { it > 0 } ?: dm.widthPixels
+                val h = cfg.vScreenHeight.takeIf { it > 0 } ?: dm.heightPixels
+                val d = cfg.vScreenDpi.takeIf { it > 0 } ?: dm.densityDpi
                 Thread {
-                    val ok = com.managedfloating.app.ManagedRuntime.startSession(
-                        cfg.connectPort, cfg.vScreenWidth, cfg.vScreenHeight, cfg.vScreenDpi,
-                    )
+                    val ok = com.managedfloating.app.ManagedRuntime.startSession(cfg.connectPort, w, h, d)
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         connecting = false
                         sessionActive = ManagedBridge.controller()?.isSessionActive() == true

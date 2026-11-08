@@ -72,11 +72,13 @@ fun AppsScreen(onOpenSettings: () -> Unit) {
     fun connect() {
         connecting = true
         message = "正在连接 adbd 并拉起助手…"
+        // 分辨率缺省时以当前屏幕为准（防止设置页尚未初始化导致 0×0 建屏失败）
+        val dm = context.resources.displayMetrics
+        val w = cfg.vScreenWidth.takeIf { it > 0 } ?: dm.widthPixels
+        val h = cfg.vScreenHeight.takeIf { it > 0 } ?: dm.heightPixels
+        val d = cfg.vScreenDpi.takeIf { it > 0 } ?: dm.densityDpi
         Thread {
-            val ok = ManagedRuntime.startSession(
-                cfg.connectPort,
-                cfg.vScreenWidth, cfg.vScreenHeight, cfg.vScreenDpi,
-            )
+            val ok = ManagedRuntime.startSession(cfg.connectPort, w, h, d)
             Handler(Looper.getMainLooper()).post {
                 connecting = false
                 sessionActive = ManagedBridge.controller()?.isSessionActive() == true
