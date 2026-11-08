@@ -1,4 +1,4 @@
-# DEV_CHECKLIST — 20261109-1（101-main-ui / MCP 工具补全）
+# DEV_CHECKLIST — 20261109-1（009-mcp-tools / MCP 工具补全）
 
 ## 环境
 - [x] 真机在线（USB + 无线调试；adb devices 可见）

@@ -26,6 +26,10 @@
 | M-04 | 004-server 对外接口 | [spec.md](./004-server/spec.md) | [plan.md](./004-server/plan.md) |
 | M-05 | 005-script 自动化服务任务 | [spec.md](./005-script/spec.md) | [plan.md](./005-script/plan.md) |
 | M-06 | 006-config-ui 配置界面 | [spec.md](./006-config-ui/spec.md) | [plan.md](./006-config-ui/plan.md) |
+| M-07 | 007-webrtc 界面推流 | [spec.md](./007-webrtc/spec.md) | [plan.md](./007-webrtc/plan.md) |
+| M-08 | 008-client 播控客户端 | [spec.md](./008-client/spec.md) | [plan.md](./008-client/plan.md) |
+| M-09 | 101-main-ui 主界面 | [spec.md](./101-main-ui/spec.md) | [plan.md](./101-main-ui/plan.md) |
+| M-10 | 009-mcp-tools MCP 工具完善 | [spec.md](./009-mcp-tools/spec.md) | [plan.md](./009-mcp-tools/plan.md) |
 
 
 ## 里程碑实现状态（as-built）
@@ -35,5 +39,5 @@
 | M1 托管 POC（建屏/承载/截帧/注入） | ✅ 完成 | logs/20261107-2, 20261107-3 |
 | M2 呈现与操作（浮窗/常规/headless + token + 会话恢复） | ✅ 完成 | logs/20261107-4 |
 | M3 自动化服务任务（Node :node 进程 + 立即/间隔/cron） | ✅ 完成 | logs/20261107-5 |
-| M4 对外协议（MCP + MJPEG 视频流） | ⏳ 未开始 | — |
+| M4 对外协议（MCP + MJPEG 视频流） | ✅ 完成（MCP 19 工具） | logs/20261109-1 |
 | M5 打磨（前台服务常驻/端口自动发现/文档） | ⏳ 部分 | — |

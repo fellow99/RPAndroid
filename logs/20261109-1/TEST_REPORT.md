@@ -1,6 +1,6 @@
-# TEST_REPORT — 20261109-1（101-main-ui / MCP 工具补全）
+# TEST_REPORT — 20261109-1（009-mcp-tools / MCP 工具补全）
 
-> 需求：101-main-ui 追加（MCP 能力验证与补全）｜ 依据：`specs/101-main-ui/mcp-tools-spec.md`
+> 需求：009-mcp-tools 追加（MCP 能力验证与补全）｜ 依据：`specs/009-mcp-tools/spec.md`
 > 结论：**TC-A ~ TC-D 全部通过**；新增工具真机可用；回归通过。
 > 环境：Redmi M2105K81C / Android 13（MIUI）/ 虚拟屏 1600×2560 dpi=360 / 覆盖安装（未卸载）。
 > 说明：文档与证据不含真实 IP/token/账号（已用占位符；`.pi/` 配置不入库）。

@@ -1,4 +1,4 @@
-# TEST_CHECKLIST — 20261109-1（101-main-ui / MCP 工具补全）
+# TEST_CHECKLIST — 20261109-1（009-mcp-tools / MCP 工具补全）
 
 > 环境：真机 Redmi M2105K81C / Android 13（MIUI），虚拟屏 1600×2560 dpi=360，
 > 覆盖安装（`adb install -r`，**未卸载**）。所有地址/凭证用占位符。

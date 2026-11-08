@@ -1,10 +1,10 @@
-# REVIEW_REPORT — 20261109-1（101-main-ui / MCP 工具补全）
+# REVIEW_REPORT — 20261109-1（009-mcp-tools / MCP 工具补全）
 
 ## 0. 评审方式
 
 - 技能：`requesting-code-review` + `receiving-code-review`（均已安装确认）。
 - 本执行环境未提供可派发子代理的工具，按 `specs-based-devflow` 的 **fallback 路径**执行：
-  以 reviewer 模板自建评审上下文（实现摘要 + `specs/101-main-ui/mcp-tools-spec.md` + git range），
+  以 reviewer 模板自建评审上下文（实现摘要 + `specs/009-mcp-tools/spec.md` + git range），
   对 diff 做只读走查，输出分级结论；随后按 `receiving-code-review` 的“先核验、再修复”流程处理。
 - Git range：`5f05072..fa72049`（spec → 实现），评审后修复见 `code-review-fix` 提交。
 - 只读原则：评审阶段只执行 `git diff/show/log`；修复在评审结论确认后进行。
@@ -65,5 +65,5 @@
 
 **Ready to merge?** Yes（Critical/Important 全部关闭；Minor 已记录）。
 
-**Reasoning:** 实现与 `mcp-tools-spec.md` 一致，新增能力均有真机证据与单测；剩余风险集中在
+**Reasoning:** 实现与 `spec.md` 一致，新增能力均有真机证据与单测；剩余风险集中在
 ROM 对剪贴板/无障碍/精确闹钟的策略限制，已文档化并有降级路径（ASCII 输入、`screen_key`、停用任务）。
