@@ -18,7 +18,7 @@ Thumbs.db
 # Logs
 # Logs (devflow phase artifacts are tracked; raw logs ignored)
 *.log
-logs/**/*.log
+/logs
 
 # Sensitive / local-only
 *.keystore
