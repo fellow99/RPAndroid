@@ -66,8 +66,12 @@ App 首次使用（未配对）时，在「应用」与「自动化」两个栏�
 - 配对失败：显示一句"怎么办"（如"请确认屏幕上的 6 位码没写错、配对窗口还开着，再试一次"），不崩溃，可重试。
 
 ### FR-102-4 自动打开无线调试
-- `ManagedRuntime.startSession` 成功（手动连接或自动恢复）后，尽力执行 `settings put global adb_wifi_enabled 1`（经已配对的 shell 权限；失败仅记日志，不阻塞）。
-- 目的：重启 / 换 Wi-Fi 系统关掉无线调试后，App 下次起会话自动替你重新打开，无需手动再开。
+- **根因**：Android 在重启/换 Wi-Fi 后会关闭无线调试（`adb_wifi_enabled` 变 0）；而“经已配对 shell 会话补写”会死锁（没会话→连不上→写不了）。
+- **解法**：用户用电脑**一次性**授权（不弹框、不需 root）：
+  `adb shell pm grant com.managedfloating.app android.permission.WRITE_SECURE_SETTINGS`
+  授权后 App 在启动自动恢复与建立会话前先调 `WirelessDebugging.ensureEnabled()`，直接把 `adb_wifi_enabled` 写回 1（`Settings.Global`）。
+- 未授权/无 Wi-Fi/被系统拨回时静默降级（返回 NO_WIFI / NO_PERMISSION / REFUSED），由界面引导手动开启。
+- 注意：重启无线调试后**连接端口会变**，需自动发现或用户手动填（见 §7）。
 
 ### FR-102-5 配对状态持久化
 - 配对成功 + 会话建立后写 `ServerConfig.paired = true`。
