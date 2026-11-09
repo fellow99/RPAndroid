@@ -104,9 +104,11 @@ fun AppsScreen(onOpenSettings: () -> Unit) {
     }
 
     val hosted = PresentationHub.hostedApp
+    val needsWizard = !cfg.paired && cfg.connectPort == 0
 
     Box(Modifier.fillMaxSize()) {
         when {
+            needsWizard -> PairingWizard(onDone = { sessionActive = ManagedBridge.controller()?.isSessionActive() == true })
             cfg.connectPort == 0 -> PortNeededContent(onOpenSettings)
             !sessionActive -> ConnectContent(connecting, message, onConnect = ::connect)
             hosted == null -> AppGrid(onSelect = { launchApp(it) })

@@ -140,6 +140,9 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         when {
+            !cfg.paired && cfg.connectPort == 0 -> PairingWizard(onDone = {
+                sessionActive = ManagedBridge.controller()?.isSessionActive() == true
+            })
             cfg.connectPort == 0 -> PortNeededContent(onOpenSettings)
             !sessionActive -> ConnectContent(connecting, message, onConnect = {
                 connecting = true
