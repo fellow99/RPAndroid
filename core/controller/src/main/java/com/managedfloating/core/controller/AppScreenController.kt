@@ -47,8 +47,12 @@ class AppScreenController(private val context: Context) : ScreenController {
     /** 正在运行自动化任务的判定（app 层注入 TaskRuntime.runningTaskId）。 */
     @Volatile var hasRunningTask: (() -> Boolean)? = null
 
+    /** 离开主屏承载（Mode B）时的投影释放钩子（app 层注入，停止 ProjectionService/清帧源）。 */
+    @Volatile var releaseProjection: (() -> Unit)? = null
+
     /**
      * 切换承载模式：先做守卫（运行自动化任务时禁止切换，FR-010-005），再更新模式并持久化/通知。
+     * 离开 MAIN 时经 [releaseProjection] 释放 MediaProjection（避免 B→A 后仍后台捕获主屏）。
      * 返回 null 表示可切换；否则返回拒绝原因（调用方在切换前应以此判断）。
      */
     fun switchDisplayMode(target: DisplayMode): String? {
@@ -56,8 +60,12 @@ class AppScreenController(private val context: Context) : ScreenController {
         if (hasRunningTask?.invoke() == true) {
             return "拒绝切换：自动化任务正在运行（runningTaskId != null）"
         }
+        val old = displayMode
         displayMode = target
         persistDisplayMode?.invoke(target)
+        if (old == DisplayMode.MAIN && target != DisplayMode.MAIN) {
+            releaseProjection?.invoke()
+        }
         onDisplayModeChanged?.invoke(target)
         return null
     }

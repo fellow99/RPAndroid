@@ -49,6 +49,10 @@ object ManagedRuntime {
             controller.persistDisplayMode = { m -> cfg.displayMode = m.wire }
             controller.hasRunningTask = { com.managedfloating.app.script.TaskRuntime.runningTaskId != null }
             controller.mainOps = com.managedfloating.app.ModeBOps(app, shell)
+            // 离开 Mode B（切回虚拟屏承载）时释放 MediaProjection，避免后台仍捕获主屏。
+            controller.releaseProjection = {
+                com.managedfloating.app.proj.MediaProjectionHost.releaseProjection(app, controller)
+            }
             // 承载状态同步：REST(/client) 的 /session/launch 经 controller.launch 成功后回调，
             // 把变化发布到 App UI（应用栏自动切换呈现 / 回到网格）。与 App UI 自身发起共用同一入口。
             controller.onHostChanged = {
@@ -73,6 +77,16 @@ object ManagedRuntime {
                         "runningTaskId" to com.managedfloating.app.script.TaskRuntime.runningTaskId,
                         // 010-display-mode：当前承载模式（A 虚拟屏 / B 主屏）
                         "mode" to controller.displayMode.wire,
+                        // Mode B 投影是否存活（MediaProjection 就绪且已挂帧源）
+                        "projectionActive" to (controller.displayMode == com.managedfloating.core.controller.DisplayMode.MAIN
+                            && controller.projectionFrameSource != null),
+                        // 生效帧分辨率：Mode B 用主屏(投影)分辨率，Mode A 用虚拟屏分辨率
+                        "frameWidth" to if (controller.displayMode == com.managedfloating.core.controller.DisplayMode.MAIN)
+                            (controller.projectionFrameSource?.width ?: cfg.vScreenWidth)
+                        else cfg.vScreenWidth,
+                        "frameHeight" to if (controller.displayMode == com.managedfloating.core.controller.DisplayMode.MAIN)
+                            (controller.projectionFrameSource?.height ?: cfg.vScreenHeight)
+                        else cfg.vScreenHeight,
                         // 供客户端(/client)在无会话时用缓存端口自动建立会话
                         "vScreenWidth" to cfg.vScreenWidth,
                         "vScreenHeight" to cfg.vScreenHeight,

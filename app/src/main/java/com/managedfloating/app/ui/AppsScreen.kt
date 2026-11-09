@@ -237,9 +237,10 @@ private fun HostedContent(app: AppInfo) {
     fun toggleHostMode() {
         val ctl = controller as? com.managedfloating.core.controller.AppScreenController ?: return
         if (ctl.displayMode == com.managedfloating.core.controller.DisplayMode.MAIN) {
-            // B → A：释放投影，回虚拟屏承载。
-            com.managedfloating.app.proj.MediaProjectionHost.onDenied(context, ctl)
-            Toast.makeText(context, "已切回虚拟屏承载", Toast.LENGTH_SHORT).show()
+            // B → A：经状态机释放投影并回虚拟屏承载（releaseProjection 钩子停止 MediaProjection）。
+            val denied = ctl.switchDisplayMode(com.managedfloating.core.controller.DisplayMode.VIRTUAL)
+            if (denied != null) Toast.makeText(context, denied, Toast.LENGTH_LONG).show()
+            else Toast.makeText(context, "已切回虚拟屏承载", Toast.LENGTH_SHORT).show()
         } else {
             // A → B：需先经系统授权弹窗（无法静默）。
             val denied = if (ctl.hasRunningTask?.invoke() == true)

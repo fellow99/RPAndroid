@@ -37,13 +37,19 @@ object MediaProjectionHost {
             MfaLog.w("Projection", "authorization not OK (code=$resultCode); keep Mode A")
             return false
         }
+        // 投影意外停止/被系统回收（token 失效）时回滚 Mode A（FR-010-004）。
+        ProjectionService.onStopped = {
+            if (controller.displayMode == com.managedfloating.core.controller.DisplayMode.MAIN) {
+                MfaLog.w("Projection", "projection stopped unexpectedly; reverting to Mode A")
+                controller.switchDisplayMode(com.managedfloating.core.controller.DisplayMode.VIRTUAL)
+            }
+        }
         ProjectionService.onReady = { source: FrameSource ->
             // 先过守卫（FR-010-005）：若被拒（运行任务中），释放投影回滚，不挂帧源，避免状态不一致。
             val denied = controller.switchDisplayMode(com.managedfloating.core.controller.DisplayMode.MAIN)
             if (denied != null) {
                 MfaLog.w("Projection", "switch to MAIN denied: $denied; reverting projection")
-                controller.projectionFrameSource = null
-                context.stopService(Intent(context, ProjectionService::class.java))
+                releaseProjection(context, controller)
             } else {
                 controller.projectionFrameSource = source
                 MfaLog.i("Projection", "Mode B ready; projection frame source attached")
@@ -62,13 +68,14 @@ object MediaProjectionHost {
         }
     }
 
-    /** 授权被拒 / 失败 / 需要回 A：停止投影服务并清空 controller 的投影帧源与 Mode B 状态。 */
-    fun onDenied(context: Context, controller: AppScreenController) {
+    /** 授权被拒 / token 失效 / 切换回虚拟屏：停止投影服务并清空投影帧源（不切换模式本身）。 */
+    fun releaseProjection(context: Context, controller: AppScreenController) {
+        // 先撤销失效回调，避免 stopService → onDestroy → onStopped 与外部 mode 切换形成递归。
+        ProjectionService.onStopped = null
         controller.projectionFrameSource = null
         context.stopService(Intent(context, ProjectionService::class.java))
-        // 若仍在 MAIN，则退回虚拟屏承载（回滚，FR-010-004）
-        if (controller.displayMode == com.managedfloating.core.controller.DisplayMode.MAIN) {
-            controller.switchDisplayMode(com.managedfloating.core.controller.DisplayMode.VIRTUAL)
-        }
     }
+
+    /** 保留别名：释放投影（语义与 [releaseProjection] 一致）。 */
+    fun onDenied(context: Context, controller: AppScreenController) = releaseProjection(context, controller)
 }

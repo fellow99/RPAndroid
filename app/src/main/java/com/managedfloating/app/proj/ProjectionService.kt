@@ -92,6 +92,8 @@ class ProjectionService : Service() {
 
     override fun onDestroy() {
         stopProjection()
+        onStopped?.invoke()
+        onStopped = null
         onReady = null
         super.onDestroy()
     }
@@ -127,6 +129,13 @@ class ProjectionService : Service() {
         /** 投影帧源就绪回调（app 层注入，把 hub 接给 AppScreenController.projectionFrameSource）。 */
         @Volatile
         var onReady: ((FrameSource) -> Unit)? = null
+
+        /**
+         * 投影意外停止/被回收回调（app 层注入，用于 token 失效时回滚 Mode A，FR-010-004）。
+         * 在 [onDestroy] 中触发；主动释放（[MediaProjectionHost.releaseProjection]）前会先置 null 避免递归。
+         */
+        @Volatile
+        var onStopped: (() -> Unit)? = null
 
         fun intent(context: Context, code: Int, data: Intent): Intent =
             Intent(context, ProjectionService::class.java)
