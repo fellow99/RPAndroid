@@ -380,7 +380,7 @@ private fun WizardStep.body(): String = when (this) {
     WizardStep.DEVELOPER_OPTIONS -> "进入 设置 › 关于手机，向下找到“版本号”，用手指连续点它 7 次（只做这一次，屏幕会提示已进入开发者模式）。"
     WizardStep.USB_DEBUGGING -> "回到 设置 › 开发者选项，往下找到“USB 调试”，把它打开（弹出授权对话框时点允许）。"
     WizardStep.WIRELESS_DEBUGGING -> "在开发者选项里继续打开“无线调试”；打开后点“使用配对码配对设备”，屏幕上会出现一个 6 位数字配对码，把它记下来。"
-    WizardStep.PAIR_CODE -> "把屏幕上显示的 6 位数字配对码填到下面的框里，然后点「完成配对」。配对成功后 App 会自动准备好。"
+    WizardStep.PAIR_CODE -> "把屏幕上显示的 6 位数字配对码填到下面的框里，然后点「完成配对」。配对成功后 App 会自动准备好。\n\n提示：有些手机会在你切走配对窗口时立刻取消配对。建议先把本应用设为「浮窗」，让配对码窗口和本应用同屏，再填码和端口。"
     WizardStep.DONE -> ""
 }
 

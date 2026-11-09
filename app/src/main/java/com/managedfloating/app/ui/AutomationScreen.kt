@@ -31,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -69,6 +70,9 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
     var sessionActive by remember { mutableStateOf(ManagedBridge.controller()?.isSessionActive() == true) }
     var connecting by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    // paired / connectPort 提为 Compose 状态：向导写入后需触发重组（非 Composable 读取不会自动刷新）。
+    var paired by remember { mutableStateOf(cfg.paired) }
+    var connectPort by remember { mutableIntStateOf(cfg.connectPort) }
     var tasks by remember { mutableStateOf<List<ScriptTask>?>(null) }
     var editing by remember { mutableStateOf<ScriptTask?>(null) }
     var deleting by remember { mutableStateOf<ScriptTask?>(null) }
@@ -128,6 +132,8 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
         var prevRunning: String? = null
         while (true) {
             sessionActive = ManagedBridge.controller()?.isSessionActive() == true
+            paired = cfg.paired
+            connectPort = cfg.connectPort
             reload()
             val running = TaskRuntime.runningTaskId
             if (prevRunning != null && running == null) {
@@ -140,7 +146,10 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         when {
-            !cfg.paired && cfg.connectPort == 0 -> PairingWizard(onDone = {
+            !paired && connectPort == 0 -> PairingWizard(onDone = {
+                // 向导完成：立刻同步（配对/端口已写入），避免"开始使用"后无重组。
+                paired = cfg.paired
+                connectPort = cfg.connectPort
                 sessionActive = ManagedBridge.controller()?.isSessionActive() == true
             })
             // 已配对：端口未记录或未建会话 → 自动发现连接（S2）。
@@ -154,6 +163,26 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
                 val d = cfg.vScreenDpi.takeIf { it > 0 } ?: dm.densityDpi
                 Thread {
                     // 端口为 0 时自动发现（AdbConnectPort 依次试缓存/mDNS/属性/扫描），无需手动填。
+                    val port = cfg.connectPort.takeIf { it > 0 }
+                    val ok = com.managedfloating.app.ManagedRuntime.startSession(port, w, h, d)
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        connecting = false
+                        sessionActive = ManagedBridge.controller()?.isSessionActive() == true
+                        message = if (ok && sessionActive) null else "连接失败：请检查端口/配对后重试"
+                    }
+                }.apply { name = "mfa-connect"; isDaemon = true }.start()
+            }, savedPort = connectPort, onConnectWithPort = { p ->
+                if (p != null) {
+                    cfg.connectPort = p
+                    connectPort = p
+                }
+                connecting = true
+                message = "正在连接 adbd 并拉起助手…"
+                val dm = context.resources.displayMetrics
+                val w = cfg.vScreenWidth.takeIf { it > 0 } ?: dm.widthPixels
+                val h = cfg.vScreenHeight.takeIf { it > 0 } ?: dm.heightPixels
+                val d = cfg.vScreenDpi.takeIf { it > 0 } ?: dm.densityDpi
+                Thread {
                     val port = cfg.connectPort.takeIf { it > 0 }
                     val ok = com.managedfloating.app.ManagedRuntime.startSession(port, w, h, d)
                     android.os.Handler(android.os.Looper.getMainLooper()).post {

@@ -25,6 +25,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,11 +58,17 @@ fun AppsScreen(onOpenSettings: () -> Unit) {
     var sessionActive by remember { mutableStateOf(ManagedBridge.controller()?.isSessionActive() == true) }
     var connecting by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    // paired / connectPort 是普通 SharedPreferences 读取，不是 Compose 状态。
+    // 向导里配对会写入它们；不提为状态并在轮询中同步，"开始使用"后不会重组（看似无反应）。
+    var paired by remember { mutableStateOf(cfg.paired) }
+    var connectPort by remember { mutableIntStateOf(cfg.connectPort) }
 
     // 会话轮询：自动恢复/失效后界面回到正确分支；浮窗被手动关闭后回落嵌入模式。
     LaunchedEffect(Unit) {
         while (true) {
             sessionActive = ManagedBridge.controller()?.isSessionActive() == true
+            paired = cfg.paired
+            connectPort = cfg.connectPort
             if (PresentationHub.presentationMode == PresentationMode.FLOATING && !FloatingService.isActive) {
                 PresentationHub.setMode(PresentationMode.EMBEDDED)
             }
@@ -106,13 +113,30 @@ fun AppsScreen(onOpenSettings: () -> Unit) {
     }
 
     val hosted = PresentationHub.hostedApp
-    val needsWizard = !cfg.paired && cfg.connectPort == 0
+    val needsWizard = !paired && connectPort == 0
 
     Box(Modifier.fillMaxSize()) {
         when {
-            needsWizard -> PairingWizard(onDone = { sessionActive = ManagedBridge.controller()?.isSessionActive() == true })
+            needsWizard -> PairingWizard(onDone = {
+                // 向导完成：立刻同步状态（配对/端口已写入），避免"开始使用"后无重组。
+                paired = cfg.paired
+                connectPort = cfg.connectPort
+                sessionActive = ManagedBridge.controller()?.isSessionActive() == true
+            })
             // 已配对：端口未记录或未建会话 → 断开自动发现（S2），不再要求手动配端口。
-            !sessionActive -> ConnectContent(connecting, message, onConnect = ::connect)
+            !sessionActive -> ConnectContent(
+                connecting = connecting,
+                message = message,
+                onConnect = ::connect,
+                savedPort = connectPort,
+                onConnectWithPort = { p ->
+                    if (p != null) {
+                        cfg.connectPort = p
+                        connectPort = p
+                    }
+                    connect()
+                },
+            )
             hosted == null -> AppGrid(onSelect = { launchApp(it) })
             else -> HostedContent(hosted)
         }
