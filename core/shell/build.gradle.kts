@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.managedfloating.core.shell"
+    namespace = "org.fellow99.RPAndroid.core.shell"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

@@ -17,7 +17,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- 首次配对后可自动重新打开无线调试（重启/换 Wi-Fi 后系统会关掉它）。
          该权限不会在使用中弹框，需用户用电脑一次性授权：
-         adb shell pm grant com.managedfloating.app android.permission.WRITE_SECURE_SETTINGS
+         adb shell pm grant org.fellow99.RPAndroid android.permission.WRITE_SECURE_SETTINGS
          未授权时功能自动降级（仅能经已建立的 shell 会话补写）。 -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
@@ -43,7 +43,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.ManagedFloatingApp">
+        android:theme="@style/Theme.RPAndroid">
 
         <activity
             android:name=".MainActivity"
@@ -95,7 +95,7 @@
 
         <provider
             android:name=".helper.HandoffProvider"
-            android:authorities="com.managedfloating.app.helper"
+            android:authorities="org.fellow99.RPAndroid.helper"
             android:exported="true"
             android:grantUriPermissions="false" />
 

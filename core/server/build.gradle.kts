@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.managedfloating.core.server"
+    namespace = "org.fellow99.RPAndroid.core.server"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

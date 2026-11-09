@@ -1,6 +1,6 @@
-# ManagedFloatingApp
+# RP自动化
 
-在 Android 设备上创建自有虚拟屏，承载并控制第三方 App，通过 REST、MCP 与 MJPEG 对外提供屏幕查看、输入注入、应用承载和自动化服务。仅面向局域网或 USB，不提供公网服务。
+免Root自动化神器——在 Android 设备上创建自有虚拟屏，承载并控制第三方 App，通过 REST、MCP 与 MJPEG 对外提供屏幕查看、输入注入、应用承载和自动化服务。仅面向局域网或 USB，不提供公网服务。
 
 ## 核心能力
 

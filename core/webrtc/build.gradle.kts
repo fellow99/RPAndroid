@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.managedfloating.core.webrtc"
+    namespace = "org.fellow99.RPAndroid.core.webrtc"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

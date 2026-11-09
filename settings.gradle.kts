@@ -1,4 +1,4 @@
-// ManagedFloatingApp —— Gradle 多模块工程
+// RPAndroid —— Gradle 多模块工程
 //
 // 本机访问 google maven 偶发不稳，故镜像前置（阿里云），404 时自动回退官方仓库；
 // maven central 直连可用。
@@ -24,7 +24,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ManagedFloatingApp"
+rootProject.name = "RPAndroid"
 
 // 模块占位（000-scaffold）：
 //   app               → 入口 / 配置界面 / 三种呈现模式（架构 F + C）

@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.managedfloating.app"
+    namespace = "org.fellow99.RPAndroid"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.managedfloating.app"
+        applicationId = "org.fellow99.RPAndroid"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
