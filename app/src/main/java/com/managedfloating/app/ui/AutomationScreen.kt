@@ -143,7 +143,7 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
             !cfg.paired && cfg.connectPort == 0 -> PairingWizard(onDone = {
                 sessionActive = ManagedBridge.controller()?.isSessionActive() == true
             })
-            cfg.connectPort == 0 -> PortNeededContent(onOpenSettings)
+            // 已配对：端口未记录或未建会话 → 自动发现连接（S2）。
             !sessionActive -> ConnectContent(connecting, message, onConnect = {
                 connecting = true
                 message = "正在连接 adbd 并拉起助手…"
@@ -153,7 +153,9 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
                 val h = cfg.vScreenHeight.takeIf { it > 0 } ?: dm.heightPixels
                 val d = cfg.vScreenDpi.takeIf { it > 0 } ?: dm.densityDpi
                 Thread {
-                    val ok = com.managedfloating.app.ManagedRuntime.startSession(cfg.connectPort, w, h, d)
+                    // 端口为 0 时自动发现（AdbConnectPort 依次试缓存/mDNS/属性/扫描），无需手动填。
+                    val port = cfg.connectPort.takeIf { it > 0 }
+                    val ok = com.managedfloating.app.ManagedRuntime.startSession(port, w, h, d)
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
                         connecting = false
                         sessionActive = ManagedBridge.controller()?.isSessionActive() == true

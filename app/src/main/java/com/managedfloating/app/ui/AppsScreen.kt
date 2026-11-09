@@ -78,7 +78,9 @@ fun AppsScreen(onOpenSettings: () -> Unit) {
         val h = cfg.vScreenHeight.takeIf { it > 0 } ?: dm.heightPixels
         val d = cfg.vScreenDpi.takeIf { it > 0 } ?: dm.densityDpi
         Thread {
-            val ok = ManagedRuntime.startSession(cfg.connectPort, w, h, d)
+            // 端口为 0 时自动发现（AdbConnectPort 依次试缓存/mDNS/属性/扫描），无需手动填。
+            val port = cfg.connectPort.takeIf { it > 0 }
+            val ok = ManagedRuntime.startSession(port, w, h, d)
             Handler(Looper.getMainLooper()).post {
                 connecting = false
                 sessionActive = ManagedBridge.controller()?.isSessionActive() == true
@@ -109,7 +111,7 @@ fun AppsScreen(onOpenSettings: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         when {
             needsWizard -> PairingWizard(onDone = { sessionActive = ManagedBridge.controller()?.isSessionActive() == true })
-            cfg.connectPort == 0 -> PortNeededContent(onOpenSettings)
+            // 已配对：端口未记录或未建会话 → 断开自动发现（S2），不再要求手动配端口。
             !sessionActive -> ConnectContent(connecting, message, onConnect = ::connect)
             hosted == null -> AppGrid(onSelect = { launchApp(it) })
             else -> HostedContent(hosted)

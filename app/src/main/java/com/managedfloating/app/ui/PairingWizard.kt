@@ -73,6 +73,9 @@ fun PairingWizard(onDone: () -> Unit) {
     var manualPort by remember { mutableStateOf("") }
     var pairing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    // 配对已成功后的连接状态：null=未/进行中，true=会话已建（→完成页），false=连接失败（给手动连接端口重试）
+    var pairDone by remember { mutableStateOf(false) }
+    var connectPortInput by remember { mutableStateOf("") }
     // 手机上系统开关的实际状态（读不到按关着/不显示）
     var devOptions by remember { mutableStateOf(false) }
     var usbDebug by remember { mutableStateOf(false) }
@@ -112,6 +115,29 @@ fun PairingWizard(onDone: () -> Unit) {
         error = null
     }
 
+    /** 建立会话：优先用用户填的连接端口（[connectPortInput]），否则自动发现。 */
+    fun connectSession(app: android.content.Context) {
+        pairing = true
+        error = null
+        Thread {
+            val dm = app.resources.displayMetrics
+            val w = cfg.vScreenWidth.takeIf { it > 0 } ?: dm.widthPixels
+            val h = cfg.vScreenHeight.takeIf { it > 0 } ?: dm.heightPixels
+            val d = cfg.vScreenDpi.takeIf { it > 0 } ?: dm.densityDpi
+            val manualPort = connectPortInput.trim().toIntOrNull()
+            val okSession = ManagedRuntime.startSession(manualPort, w, h, d)
+            Handler(Looper.getMainLooper()).post {
+                pairing = false
+                if (okSession && ManagedRuntime.controller()?.isSessionActive() == true) {
+                    step = WizardStep.DONE.ordinal
+                } else {
+                    // 连接失败：配对已完成，只缺连接。引导填无线调试页顶部端口。
+                    error = "配对已完成 ✓，但连接没成功。\n无线调试页顶部的端口号和这里不同时可填到下面重试。"
+                }
+            }
+        }.apply { name = "mfa-connect"; isDaemon = true }.start()
+    }
+
     /** 配对 + 建立会话；成功后回写配置并通知上层。 */
     fun doPair() {
         val c = code.trim()
@@ -133,7 +159,8 @@ fun PairingWizard(onDone: () -> Unit) {
         val app = context.applicationContext
         Thread {
             val sh = ManagedRuntime.shell()
-            // 配对只连本机 adbd（127.0.0.1），拿 RSA 钥匙。
+            // 配对只连本机 adbd（127.0.0.1），拿 RSA 钥匙。配对本身成功即算配好
+            // （设备“已配对设备”里会出现本 App 的钥匙）；会话连接失败不再回退向导。
             val pairedOk = sh != null && runCatching { runBlocking { sh.pair("127.0.0.1", port, c) } }.getOrDefault(false)
             if (!pairedOk) {
                 Handler(Looper.getMainLooper()).post {
@@ -142,21 +169,10 @@ fun PairingWizard(onDone: () -> Unit) {
                 }
                 return@Thread
             }
-            // 配对成功后自动发现连接端口并建立会话（startSession(null) 会自取缓存/mDNS/属性/扫描）。
-            val dm = app.resources.displayMetrics
-            val w = cfg.vScreenWidth.takeIf { it > 0 } ?: dm.widthPixels
-            val h = cfg.vScreenHeight.takeIf { it > 0 } ?: dm.heightPixels
-            val d = cfg.vScreenDpi.takeIf { it > 0 } ?: dm.densityDpi
-            val okSession = ManagedRuntime.startSession(null, w, h, d)
-            Handler(Looper.getMainLooper()).post {
-                pairing = false
-                if (okSession && ManagedRuntime.controller()?.isSessionActive() == true) {
-                    cfg.paired = true
-                    step = WizardStep.DONE.ordinal
-                } else {
-                    error = "配对成功，但建立会话没成功，请再试一次"
-                }
-            }
+            // 配对成功：立即落盘，设备已认这把钥匙。
+            cfg.paired = true
+            Handler(Looper.getMainLooper()).post { pairDone = true }
+            connectSession(app)
         }.apply { name = "mfa-pair"; isDaemon = true }.start()
     }
 
@@ -214,6 +230,19 @@ fun PairingWizard(onDone: () -> Unit) {
                             manualPort = manualPort,
                             onManualPort = { manualPort = it },
                         )
+                        // 配对成功后连接失败：给连接端口（无线调试页顶部）输入 + 重试。
+                        if (pairDone) {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = connectPortInput,
+                                onValueChange = { connectPortInput = it.filter { c -> c.isDigit() }.take(5) },
+                                label = { Text("无线调试连接端口") },
+                                placeholder = { Text("从无线调试页顶部那一行看到" ) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
 
                     WizardStep.DONE -> {
@@ -244,7 +273,14 @@ fun PairingWizard(onDone: () -> Unit) {
                     // 系统设置入口（跳「关于手机」/「开发者选项」）放在正文、此处置"我已做好"。
                     Button(onClick = ::goToNext) { Text("我已经做好了") }
                 }
-                step == WizardStep.PAIR_CODE.ordinal -> Button(onClick = ::doPair) { Text("完成配对") }
+                step == WizardStep.PAIR_CODE.ordinal -> {
+                    if (pairDone) {
+                        // 配对已完成，只差连接：填好连接端口后「重新连接」。
+                        Button(onClick = { connectSession(context.applicationContext) }) { Text("重新连接") }
+                    } else {
+                        Button(onClick = ::doPair) { Text("完成配对") }
+                    }
+                }
                 else -> Button(onClick = onDone) { Text("开始使用") }
             }
         }
