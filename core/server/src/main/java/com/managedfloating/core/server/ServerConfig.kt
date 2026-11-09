@@ -39,6 +39,14 @@ class ServerConfig(context: Context) {
         get() = prefs.getInt(KEY_VD, 0)
         set(v) = prefs.edit().putInt(KEY_VD, v).apply()
 
+    /**
+     * 是否已完成首次配对（102-quick-start）。
+     * 与 [connectPort] 一起决定首次使用向导是否显示：`!paired && connectPort == 0` 时展示向导。
+     */
+    var paired: Boolean
+        get() = prefs.getBoolean(KEY_PAIRED, false)
+        set(v) = prefs.edit().putBoolean(KEY_PAIRED, v).apply()
+
     companion object {
         const val DEFAULT_PORT = 8099
         private const val KEY_PORT = "port"
@@ -47,6 +55,7 @@ class ServerConfig(context: Context) {
         private const val KEY_VW = "v_screen_w"
         private const val KEY_VH = "v_screen_h"
         private const val KEY_VD = "v_screen_dpi"
+        private const val KEY_PAIRED = "paired"
 
         /** 请求头名。 */
         const val HEADER = "X-Auth-Token"
