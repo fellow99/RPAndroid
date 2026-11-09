@@ -63,6 +63,9 @@ App 首次使用（未配对）时，在「应用」与「自动化」两个栏�
 - 配对端口：优先自动发现（mDNS `_adb-tls-pairing`，`NsdAdbServiceFinder`）；发现不到走手动输入（可选）。
 - 执行：`NoRootShell.pair("127.0.0.1", pairPort, code)`（配对仅连本机 adbd）。
 - 配对成功 → `ManagedRuntime.startSession(connectPort=null)`（内部自动发现连接端口并建立会话，成功后把实际端口写入 `ServerConfig.connectPort`）。
+- **连接端口自动探测（FR-102-3a）**：多来源依次尝试——进程内缓存 → `service.adb.tls.port`（`getprop`）→ mDNS `_adb-tls-connect`（`CompositeServiceFinder`）→ 本机端口扫描（512 并发 / 120ms 超时 / 15s 预算，先 127.0.0.1）→ 用户手动。
+  显式/陈旧端口连接失败时**自动回退**探测，并以实际连上的端口回写 `connect_port`。
+  注：`/proc/net/tcp` 在 Android 10+ 对 App 不可读，仅作为旧系统兼容来源。
 - 配对失败：显示一句"怎么办"（如"请确认屏幕上的 6 位码没写错、配对窗口还开着，再试一次"），不崩溃，可重试。
 
 ### FR-102-4 自动打开无线调试
