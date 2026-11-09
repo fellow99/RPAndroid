@@ -12,7 +12,7 @@
 - root 路径（可选）：`su` 直连同一种 shell 助手。
 
 ### 1.2 Dependencies
-- 参考编码：Mika `core/adb/`（自实现 ADB 协议 + 配对）。不引入第三方 ADB 库。
+- 参考编码：参考工程 `core/adb/`（`d:\GitHub\AI\Mika`，自实现 ADB 协议 + 配对）。不引入第三方 ADB 库。
 - 平台接口：`DisplayManager.createVirtualDisplay`（需 CREATE_VIRTUAL_DISPLAY）、`IWindowManager`（焦点/方向）、`startActivity --display` / `wm`。
 
 ## 2. Constitution Compliance
@@ -41,7 +41,7 @@
 - 主进程持有 ShellController 门面；真正高权限操作委托 shell 助手进程（Binder）。
 
 ### 6.2 Key Algorithms
-- 配对握手（ADB RSA-2048）、端口发现（复用 Mika 经验：缓存端口/系统属性/mDNS/本地扫描）。
+- 配对握手（ADB RSA-2048）、端口发现（复用参考工程经验：缓存端口/系统属性/mDNS/本地扫描）。
 
 ### 6.3 Error Handling
 - 能力探测失败 → 明确错误码（如 `not_paired` / `not_supported`），上层降级。

@@ -2,7 +2,7 @@
 
 > Module: app（UI），core/shell（最小支撑：配对端口发现、自动打开无线调试）。
 > Status: 设计（2026-11-09，specs-based-devflow）
-> 参考：Mika `PhoneSetupFlow` / `WirelessDebuggingAutoOn`（只借鉴流程与文案思路，不引入聊天/智能体）；不落盘任何真实 IP/token。
+> 参考：参考工程 `PhoneSetupFlow` / `WirelessDebuggingAutoOn`（`d:\GitHub\AI\Mika`，只借鉴流程与文案思路，不引入聊天/智能体）；不落盘任何真实 IP/token。
 
 ## 1. Module Overview
 

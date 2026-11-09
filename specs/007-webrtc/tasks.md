@@ -12,7 +12,7 @@
 
 ## T2 帧源落 App：FrameHub + Surface 交接
 - [x] `core/controller/FrameHub.kt`：ImageReader(RGBA×2) + HandlerThread；消费最新帧（处理 rowStride）；`latestPng()` 缓存（静态复用）；暴露 `rgba` 供 WebRTC 与 w/h；`release()`。
-- [x] `core/shell/vd/VdHelper.kt`：新增 `--surface-sock` 改造 → **最终采用 Mika 式：经 App 导出 ContentProvider 跨 UID Binder 事务拉取 App 帧 Surface** 建虚拟屏；未提供/失败回退 legacy 自持 ImageReader。
+- [x] `core/shell/vd/VdHelper.kt`：新增 `--surface-sock` 改造 → **最终采用参考工程式：经 App 导出 ContentProvider 跨 UID Binder 事务拉取 App 帧 Surface** 建虚拟屏；未提供/失败回退 legacy 自持 ImageReader。
 - [x] `core/controller/VdSessionImpl.kt`：创建 FrameHub → `MfaHandoff.prepare` 待取 Surface → 助手 `--nonce` 建屏；`captureFrame()` 读 FrameHub；据 `surface_status.txt` 决定握手 vs legacy。
 - [x] `AppScreenController` / `ScreenController`：新增 `frameSource(): FrameSource?`（读路径暴露）。
 - [x] 编译 + 真机回归：`surface_status=ok`，MJPEG `/stream`、`/frame`、`/action/*` 行为不变且不再走文件 IPC。

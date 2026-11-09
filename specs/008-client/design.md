@@ -18,7 +18,7 @@
   `/tasks/{id}/stop`（仅 app 内 `TaskScheduler.stop`）；③ REST 无 `/action/key`（WebRTC 时才可按键）；
   ④ 无服务端可见的"当前执行中任务 id"（app UI 用进程内 `PresentationHub.runningTaskId`，REST 侧读不到）；
   ⑤ `/health` 不携带 `authEnabled`，页面无法在进入时决定是否强制输 token。
-- 参考工程 Mika 无同类型浏览器播控台（007 已确认其无网络视频推流），此处按本工程既有 WebRtcConsole 扩写。
+- 参考工程无同类型浏览器播控台（007 已确认其无网络视频推流），此处按本工程既有 WebRtcConsole 扩写。
 
 ## 3. 头脑风暴决策（用户确认）
 

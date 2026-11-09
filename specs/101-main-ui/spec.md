@@ -2,7 +2,7 @@
 
 > Module: app（仅在 `app` 模块内实现；core 仅做最小必要支撑：虚拟屏按键注入、分辨率配置）
 > Status: 设计（2026-11-08，specs-based-devflow）
-> 参考：Mika 卡片/列表式 UE（只借鉴组织方式，不引入聊天/智能体）；不落盘任何真实 IP/token。
+> 参考：参考工程卡片/列表式 UE（`d:\GitHub\AI\Mika`，只借鉴组织方式，不引入聊天/智能体）；不落盘任何真实 IP/token。
 
 ## 1. Module Overview
 

@@ -7,22 +7,22 @@
 ## 1. 背景
 
 当前虚拟屏界面推流为 **MJPEG-over-HTTP**（`GET /stream`，PNG 帧、约 5FPS），实测卡顿。
-用户要求：先勘察参考工程 `<Mika>` 的推流实现，再以头脑风暴决策是否/如何引入 WebRTC。
+用户要求：先勘察参考工程（`d:\GitHub\AI\Mika`）的推流实现，再以头脑风暴决策是否/如何引入 WebRTC。
 
-## 2. 勘察结论（Mika 的推流实现 = 无网络视频推流）
+## 2. 勘察结论（参考工程的推流实现 = 无网络视频推流）
 
 阅读 `d:\GitHub\AI\Mika` 源码后确认：
 
-- Mika 的"实时画面"全部在**手机本机**：虚拟屏由 shell 助手（shell UID）创建，但输出 **Surface 属于 Mika App 进程**
-  （`AgentDisplay.createDisplay(reader.surface, …)` 经 `IMikaShell` Binder 传 Surface），帧直达 App 进程，
+- 参考工程的“实时画面”全部在**手机本机**：虚拟屏由 shell 助手（shell UID）创建，但输出 **Surface 属于参考工程 App 进程**
+  （`AgentDisplay.createDisplay(reader.surface, …)` 经其 Binder 接口传 Surface），帧直达 App 进程，
   限速 ≤10FPS，本地悬浮/界面 live view 消费；`latestFramePng()` 按需 PNG 快照供 MCP/OCR。
-- Mika **没有** WebRTC / MJPEG-over-HTTP / 任何网络视频推流（依赖中无 webrtc）。
-- 结构差异：Mika 帧先在 App 进程（无跨进程逐帧搬运）；我们为避免 root 把捕获放在独立 `app_process` 助手进程，
+- 参考工程**没有** WebRTC / MJPEG-over-HTTP / 任何网络视频推流（依赖中无 webrtc）。
+- 结构差异：参考工程帧先在 App 进程（无跨进程逐帧搬运）；我们为避免 root 把捕获放在独立 `app_process` 助手进程，
   帧经**文件 IPC**（写 cmd.txt/读 result.txt + PNG 文件）逐帧往返 → 结构性卡顿来源。
 
 ## 3. 关键洞察
 
-Mika 的"Surface 跨进程挂到虚拟屏"机制（App 建缓冲、助手建屏、帧落 App）**可直接复刻**，
+参考工程的“Surface 跨进程挂到虚拟屏”机制（App 建缓冲、助手建屏、帧落 App）**可直接复刻**，
 既可根治 MJPEG 卡顿，又是 WebRTC 低延迟数据面的前提。
 
 ## 4. 头脑风暴决策（用户确认）
@@ -39,7 +39,7 @@ Mika 的"Surface 跨进程挂到虚拟屏"机制（App 建缓冲、助手建屏�
 
 | 方案 | 说明 | 结论 |
 |---|---|---|
-| **A. Mika 式重排（选中）** | App 进程建 ImageReader，Surface 经本地 socket 交接给助手建虚拟屏，帧落 App；单一帧源喂 WebRTC/MJPEG//frame/预览 | 帧零冗余拷贝、MJPEG 连带根治、延迟最优。中等改动 |
+| **A. 参考工程式重排（选中）** | App 进程建 ImageReader，Surface 经本地 socket 交接给助手建虚拟屏，帧落 App；单一帧源喂 WebRTC/MJPEG//frame/预览 | 帧零冗余拷贝、MJPEG 连带根治、延迟最优。中等改动 |
 | B. 助手持续推原始帧 | 保留现捕获，助手 socket 推 I420 帧给 App 编码 | 改动小但环路带宽/CPU 高、MJPEG 仍卡。作 A 的 fallback |
 | C. 助手内编码再回传 | 助手跑编码器再 relay | 复杂度最高，不采用 |
 
@@ -88,4 +88,4 @@ Mika 的"Surface 跨进程挂到虚拟屏"机制（App 建缓冲、助手建屏�
 | 虚拟屏静态画面无新帧（SurfaceFlinger 不重绘） | FrameHub 复用最近帧；WebRTC 保活推送 |
 | 浏览器 HTTP 非安全上下文的 WebRTC 限制 | localhost/adb forward 或后续自签 TLS；真机浏览器验证 |
 | 多浏览器客户端并发 → 多硬件编码器 | 本期并发 peer 上限 2；文档说明 |
-| Surface 跨进程 Parcel 交接失败（权限/ROM） | 保留助手自持 ImageReader 的 legacy 启动参数作降级；Mika 已验证同机制可用 |
+| Surface 跨进程 Parcel 交接失败（权限/ROM） | 保留助手自持 ImageReader 的 legacy 启动参数作降级；参考工程已验证同机制可用 |

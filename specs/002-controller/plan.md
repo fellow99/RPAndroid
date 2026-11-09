@@ -17,7 +17,7 @@
 - C-8 呈现无关控制：✅（操作不依赖呈现模式）。
 
 ## 3. Research Findings
-- 参考 Mika：`core/uistate/`（界面状态、元素编号、动作效果）+ `AndroidScreen`（typeText/tap/scroll/back）。
+- 参考工程：`core/uistate/`（`d:\GitHub\AI\Mika`，界面状态、元素编号、动作效果）+ `AndroidScreen`（typeText/tap/scroll/back）。
 - 读树依据无障碍事件；自绘界面需 OCR 补充（后续里程碑）。
 - 触摸回写：呈现层把触摸坐标换算成虚拟屏坐标，交给 ScreenController 注入。
 

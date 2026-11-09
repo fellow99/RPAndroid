@@ -17,8 +17,8 @@
 - C-7 优雅降级：✅（低版本可回退 headless/全屏）。
 
 ## 3. Research Findings
-- 参考 Mika `AgentDisplay`/`DisplayFrame`：单帧转正方向、短边限 360 预览。
-- 浮窗参考 Mika 无障碍浮层（`OverlayHost`），但本工程首选 `SYSTEM_ALERT_WINDOW`。
+- 参考工程 `AgentDisplay`/`DisplayFrame`（`d:\GitHub\AI\Mika`）：单帧转正方向、短边限 360 预览。
+- 浮窗参考工程无障碍浮层（`OverlayHost`），但本工程首选 `SYSTEM_ALERT_WINDOW`。
 
 ## 4. Data Model
 - PresentationMode 枚举：Floating / Regular / Headless。

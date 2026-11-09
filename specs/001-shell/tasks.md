@@ -12,7 +12,7 @@
 - 验证：Android 13 id=2 / Android 16 id=10，承载 Settings 并截 720×1560 帧。
 
 ### M1-2 免 root 自举（ADB 客户端 + 配对）—— ✅ 完成
-- 移植 Mika `core/adb/`（SPAKE2/Ed25519 配对、TLS、CNXN/AUTH）+ `AndroidAdb`（Keystore 包装钥匙）+ 服务发现。
+- 移植参考工程 `core/adb/`（`d:\GitHub\AI\Mika`，SPAKE2/Ed25519 配对、TLS、CNXN/AUTH）+ `AndroidAdb`（Keystore 包装钥匙）+ 服务发现。
 - `NoRootShell`：`pair(host,pairPort,code)` → `connect(port)` → 拉起助手。
 - **关键平台约束**：本机（MIUI/Android 13）adbd 会话结束即杀进程组，**`setsid` 无效**；唯一可靠方式是 **App 持有 adbd `shell:`(pty) 流 + 命令前台常驻**（`startHelper`）。
 - 验证：App 自主配对成功、连接 `uid=2000(shell)`、经 pty 拉起助手建屏 id=5。
