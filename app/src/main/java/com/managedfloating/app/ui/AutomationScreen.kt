@@ -6,13 +6,22 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -28,6 +37,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,6 +71,7 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
     var message by remember { mutableStateOf<String?>(null) }
     var tasks by remember { mutableStateOf<List<ScriptTask>?>(null) }
     var editing by remember { mutableStateOf<ScriptTask?>(null) }
+    var deleting by remember { mutableStateOf<ScriptTask?>(null) }
     var showNew by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -94,6 +108,17 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
         store.upsert(task.copy(enabled = enabled))
         TaskScheduler(context.applicationContext).rescheduleAll()
         reload()
+    }
+
+    fun deleteTask(task: ScriptTask) {
+        scope.launch {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                TaskRuntime.end(task.id)
+                TaskScheduler(context.applicationContext).stop(task.id)
+                store.delete(task.id)
+            }
+            reload()
+        }
     }
 
     // 轮询：同步会话状态 + 外部(/client/REST)对任务、执行状态的变更；
@@ -139,6 +164,7 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
                 onStop = { stop(it) },
                 onToggle = { t, e -> toggleEnabled(t, e) },
                 onEdit = { editing = it },
+                onDelete = { deleting = it },
                 onNew = { showNew = true },
                 onRefresh = { reload() },
             )
@@ -160,6 +186,26 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
             reload()
         })
     }
+    deleting?.let { t ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("删除任务") },
+            text = {
+                Text(
+                    "确定删除「${t.name.ifBlank { t.id }}」吗？\n该操作会同时取消其已排的定时闹钟，且不可恢复。",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleting = null
+                    deleteTask(t)
+                }) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleting = null }) { Text("取消") }
+            },
+        )
+    }
 }
 
 @Composable
@@ -169,6 +215,7 @@ private fun AutomationList(
     onStop: (ScriptTask) -> Unit,
     onToggle: (ScriptTask, Boolean) -> Unit,
     onEdit: (ScriptTask) -> Unit,
+    onDelete: (ScriptTask) -> Unit,
     onNew: () -> Unit,
     onRefresh: () -> Unit,
 ) {
@@ -209,6 +256,7 @@ private fun AutomationList(
                         onStop = { onStop(task) },
                         onToggle = { onToggle(task, it) },
                         onEdit = { onEdit(task) },
+                        onDelete = { onDelete(task) },
                     )
                 }
             }
@@ -225,6 +273,7 @@ private fun AutomationRow(
     onStop: () -> Unit,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val context = LocalContext.current
     val label = remember(task.packageName) { appLabelFor(context, task.packageName) }
@@ -262,18 +311,51 @@ private fun AutomationRow(
                     )
                 }
             }
-            Switch(checked = task.enabled, onCheckedChange = onToggle)
-            // 右侧：执行状态及按钮（启用项）+ 编辑
+            // 右侧按钮区：无边框 + 图标（执行/停止、编辑、删除）
             if (task.enabled) {
                 when {
-                    running -> OutlinedButton(onClick = onStop) { Text("⏹ 停止") }
-                    !othersRunning -> OutlinedButton(onClick = onRun) { Text("▶ 执行") }
-                    else -> androidx.compose.material3.Text("", style = MaterialTheme.typography.bodySmall)
+                    running -> IconTextButton(StopIcon, "停止", onStop)
+                    !othersRunning -> IconTextButton(Icons.Filled.PlayArrow, "执行", onRun)
+                    // 其它任务执行中：占位，避免布局跳动
+                    else -> Spacer(Modifier.width(48.dp))
                 }
             }
-            TextButton(onClick = onEdit) { Text("编辑") }
+            IconTextButton(Icons.Filled.Edit, "编辑", onEdit)
+            IconTextButton(Icons.Filled.Delete, "删除", onDelete)
+            // 是否启用开关放最右侧
+            Switch(checked = task.enabled, onCheckedChange = onToggle)
         }
     }
+}
+
+/** 无边框 + 图标的文本按钮（自动化任务行内按钮统一样式）。 */
+@Composable
+private fun IconTextButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick) {
+        Icon(icon, contentDescription = label, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(label)
+    }
+}
+
+/** “停止”方框图标：material-icons-core 不含 Stop，按需定义一个。 */
+private val StopIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "Stop",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).addPath(
+        pathData = PathBuilder().apply {
+            moveTo(6f, 6f)
+            lineTo(18f, 6f)
+            lineTo(18f, 18f)
+            lineTo(6f, 18f)
+            close()
+        }.nodes,
+        fill = SolidColor(Color.Black),
+    ).build()
 }
 
 private fun appLabelFor(context: android.content.Context, pkg: String?): String? {

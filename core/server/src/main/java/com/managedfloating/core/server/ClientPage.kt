@@ -82,6 +82,9 @@ object ClientPage {
          cursor:pointer; }
   .btn:hover { background:#3a4150; }
   .btn.sm { padding:4px 8px; font-size:11px; }
+  .btn svg { width:12px; height:12px; vertical-align:-1px; margin-right:3px; }
+  .btn.danger { color:#f28b82; }
+  .btn.danger:hover { background:rgba(242,139,130,.15); }
   .switch { position:relative; width:34px; height:19px; flex:none; }
   .switch input { opacity:0; width:0; height:0; }
   .switch span { position:absolute; inset:0; background:#3a4150; border-radius:19px; transition:.15s; }
@@ -646,17 +649,32 @@ object ClientPage {
     var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!t.enabled;
     sw.appendChild(cb); sw.appendChild(document.createElement("span"));
     cb.addEventListener("change", function () { toggleTask(t, cb.checked); });
-    actr.appendChild(sw);
     if (t.enabled) {
       var running = effectiveRunning();
-      if (running === t.id) { actr.appendChild(mkBtn("⏹ 停止", function () { stopTask(t); })); }
-      else if (!running) { actr.appendChild(mkBtn("▶ 执行", function () { runTask(t); })); }
+      if (running === t.id) { actr.appendChild(mkBtn(IC.stop, "停止", function () { stopTask(t); })); }
+      else if (!running) { actr.appendChild(mkBtn(IC.play, "执行", function () { runTask(t); })); }
     }
-    actr.appendChild(mkBtn("编辑", function () { openEdit(t); }));
+    actr.appendChild(mkBtn(IC.edit, "编辑", function () { openEdit(t); }));
+    var delBtn = mkBtn(IC.del, "删除", function () { deleteTask(t); });
+    delBtn.classList.add("danger");
+    actr.appendChild(delBtn);
+    // 是否启用开关放最右侧
+    actr.appendChild(sw);
     d.appendChild(img); d.appendChild(acol); d.appendChild(actr);
     return d;
   }
-  function mkBtn(label, fn) { var b = el("button", "btn sm", label); b.addEventListener("click", fn); return b; }
+  function mkBtn(icon, label, fn) {
+    var b = el("button", "btn sm", "");
+    b.innerHTML = (icon || "") + (label ? "<span>" + label + "</span>" : "");
+    b.addEventListener("click", fn);
+    return b;
+  }
+  var IC = {
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>',
+    edit: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>',
+    del: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>'
+  };
   function runTask(t) {
     api("/tasks/" + enc(t.id) + "/run", { method: "POST" })
       .then(function (r) { return r.json(); })
@@ -678,6 +696,18 @@ object ClientPage {
           renderAuto();
         } else showToast("停止失败");
       }).catch(function (e) { showToast("停止失败：" + e.message); });
+  }
+  function deleteTask(t) {
+    if (!confirm("确定删除「" + (t.name || t.id) + "」吗？该操作会取消其已排闹钟且不可恢复。")) return;
+    api("/tasks/" + enc(t.id), { method: "DELETE" })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res && res.ok) {
+          if (runningLocal === t.id) { runningLocal = null; runningServer = null; lastServerRunning = null; }
+          showToast("已删除：" + (t.name || t.id));
+          refreshAuto(); renderAuto();
+        } else showToast("删除失败");
+      }).catch(function (e) { showToast("删除失败：" + e.message); });
   }
   function toggleTask(t, enabled) {
     var body = { id: t.id, name: t.name, packageName: t.packageName || null, script: t.script, enabled: enabled, kind: t.kind, intervalMs: t.intervalMs, cron: t.cron };

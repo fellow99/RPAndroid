@@ -35,7 +35,12 @@ class TaskApiImpl(private val ctx: Context) : TaskApi {
         true
     }.getOrDefault(false)
 
-    override fun delete(id: String): Boolean = runCatching { store.delete(id); true }.getOrDefault(false)
+    override fun delete(id: String): Boolean = runCatching {
+        // 删除前清理已排闹钟（stop 内部 cancel + 写停止信号，尽力而为）。
+        runCatching { scheduler.stop(id) }
+        store.delete(id)
+        true
+    }.getOrDefault(false)
 
     override fun modify(id: String, patchJson: String): Boolean = runCatching {
         val existing = store.get(id) ?: return@runCatching false
