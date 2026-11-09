@@ -157,6 +157,13 @@ object ManagedRuntime {
                     "Runtime", "session ready port=$connectPort ${width}x$height")
                 synchronized(stateLock) { c.vdSession = session }
                 connectPort?.let { p -> com.managedfloating.core.server.ServerConfig(ctx).connectPort = p }
+                // 自动打开无线调试：重启/换 Wi-Fi 后系统会关掉它，配对好的 shell 权限可在会话成功时补写
+                // adb_wifi_enabled（尽力而为，失败只记日志不阻塞会话，见 102-quick-start）。
+                Thread {
+                    runCatching { kotlinx.coroutines.runBlocking { sh.run("settings put global adb_wifi_enabled 1") } }
+                        .onSuccess { com.managedfloating.core.server.MfaLog.i("Runtime", "auto wireless-debugging put result=$it") }
+                        .onFailure { com.managedfloating.core.server.MfaLog.e("Runtime", "auto wireless-debugging failure", it) }
+                }.apply { name = "mfa-wifi-on"; isDaemon = true }.start()
                 // 新会话与物理横竖屏方向对齐（设备已旋转时立即校正）
                 orientationWatcher?.recheck()
             }
