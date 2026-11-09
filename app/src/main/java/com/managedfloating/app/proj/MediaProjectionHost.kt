@@ -38,9 +38,16 @@ object MediaProjectionHost {
             return false
         }
         ProjectionService.onReady = { source: FrameSource ->
-            controller.projectionFrameSource = source
-            controller.switchDisplayMode(com.managedfloating.core.controller.DisplayMode.MAIN)
-            MfaLog.i("Projection", "Mode B ready; projection frame source attached")
+            // 先过守卫（FR-010-005）：若被拒（运行任务中），释放投影回滚，不挂帧源，避免状态不一致。
+            val denied = controller.switchDisplayMode(com.managedfloating.core.controller.DisplayMode.MAIN)
+            if (denied != null) {
+                MfaLog.w("Projection", "switch to MAIN denied: $denied; reverting projection")
+                controller.projectionFrameSource = null
+                context.stopService(Intent(context, ProjectionService::class.java))
+            } else {
+                controller.projectionFrameSource = source
+                MfaLog.i("Projection", "Mode B ready; projection frame source attached")
+            }
             ProjectionService.onReady = null
         }
         val intent = ProjectionService.intent(context, resultCode, data)

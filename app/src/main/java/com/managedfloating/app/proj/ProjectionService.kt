@@ -99,9 +99,9 @@ class ProjectionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun stopSelfQuietly() {
-        runCatching { startForeground(0, Notification.Builder(this, CHANNEL).build(), 0) }
+        // 不在此 startForeground(0,...)：id=0 非法且前台类型不匹配会在 API 34+ 崩溃（评审 I-2）。
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
         stopSelf()
-        stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
     private fun startForegroundCompat() {
