@@ -144,7 +144,7 @@ object ManagedRuntime {
                 sh.run("pkill -f 'core.shell.vd.VdHelper' 2>/dev/null; pkill -f HelperMain 2>/dev/null; true")
             }
         }
-        val session = VdSessionImpl(
+        var session = VdSessionImpl(
             context = ctx,
             shell = sh,
             connectPort = connectPort,
@@ -152,16 +152,35 @@ object ManagedRuntime {
             height = height,
             dpi = dpi,
         )
-        return runCatching { session.start() }.getOrElse {
+        var started = runCatching { session.start() }.getOrElse {
             com.managedfloating.core.server.MfaLog.e("Runtime", "session start failed", it)
             false
-        }.also { ok ->
+        }
+        // 端口可能已变化（重启 / 重开无线调试后系统换端口）：显式端口失败时回退自动探测。
+        if (!started && connectPort != null) {
+            com.managedfloating.core.server.MfaLog.i("Runtime", "explicit port $connectPort failed; retry auto-discovery")
+            runCatching { sh.stopHelper() }
+            session = VdSessionImpl(
+                context = ctx,
+                shell = sh,
+                connectPort = null,
+                width = width,
+                height = height,
+                dpi = dpi,
+            )
+            started = runCatching { session.start() }.getOrElse {
+                com.managedfloating.core.server.MfaLog.e("Runtime", "session start (auto) failed", it)
+                false
+            }
+        }
+        return started.also { ok ->
             if (ok) {
                 com.managedfloating.core.server.MfaLog.i(
-                    "Runtime", "session ready port=$connectPort ${width}x$height")
+                    "Runtime", "session ready port=${sh.lastConnectPort() ?: connectPort} ${width}x$height")
                 synchronized(stateLock) { c.vdSession = session }
                 // 显式端口或自动发现到的实际端口都要持久化，保证下次恢复会话/不卡在“请先配置端口”（102-quick-start I1）。
-                val usedPort = connectPort ?: sh.lastConnectPort()
+                // 优先用实际连上的端口（自动探测/回退时会更新），否则用显式传入的端口。
+                val usedPort = sh.lastConnectPort() ?: connectPort
                 usedPort?.let { p -> com.managedfloating.core.server.ServerConfig(ctx).connectPort = p }
                 // 自动打开无线调试：重启/换 Wi-Fi 后系统会关掉它，配对好的 shell 权限可在会话成功时补写
                 // adb_wifi_enabled（尽力而为，失败只记日志不阻塞会话，见 102-quick-start）。

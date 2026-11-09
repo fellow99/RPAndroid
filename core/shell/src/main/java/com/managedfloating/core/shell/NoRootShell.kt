@@ -39,7 +39,7 @@ class NoRootShell(private val context: Context) {
         }
     }
 
-    /** 连接本机 adbd（无线调试）。[connectPort] 为 null 时经 mDNS + 系统属性自动探测。 */
+    /** 连接本机 adbd（无线调试）。[connectPort] 为 null 时自动探测（缓存/getprop/mDNS/端口扫描）。 */
     suspend fun connect(connectPort: Int? = null): Boolean = withContext(Dispatchers.IO) {
         try {
             connected?.close()
@@ -49,12 +49,29 @@ class NoRootShell(private val context: Context) {
             } else {
                 val acp = AdbConnectPort(
                     property = { ServiceProps.connectPort() },
-                    finder = ProcNetPortFinder(),
+                    // 多来源：mDNS（最准）→ /proc/net/tcp（Android 9- 可用）。
+                    finder = com.managedfloating.core.shell.adb.CompositeServiceFinder(
+                        listOf(
+                            com.managedfloating.core.shell.adb.NsdAdbServiceFinder(context),
+                            ProcNetPortFinder(),
+                        ),
+                    ),
                     cache = AndroidAdbPortCache,
                     scan = com.managedfloating.core.shell.adb.LocalPortScan(
-                        scanner = com.managedfloating.core.shell.adb.NioPortScanner(),
+                        // 512 并发 + 120ms 超时：本机回环上关闭的端口立即 RST，整段几秒内扫完。
+                        scanner = com.managedfloating.core.shell.adb.NioPortScanner(concurrency = 512, connectTimeoutMs = 120),
                         hosts = { listOf("127.0.0.1") },
+                        budgetMs = 15_000,
                     ),
+                    // 诊断：各来源给了几个候选、扫了几个端口、是否找到 adbd。
+                    report = { c ->
+                        android.util.Log.i(
+                            "MFA/Shell",
+                            "connect candidates cache=${c.cache} prop=${c.property} mdns=${c.mdns} " +
+                                "scanned=${c.scanned} open=${c.scanOpen} adb=${c.scanAdb} manual=${c.manual} connected=${c.connected}",
+                        )
+                    },
+                    scanning = { on -> if (on) android.util.Log.i("MFA/Shell", "scanning localhost ports…") },
                 )
                 acp.connect { host, port -> AdbConnection.open(host, port, tls, 10_000) }.also { connected = it }
             }
@@ -152,11 +169,21 @@ class NoRootShell(private val context: Context) {
     companion object {
         const val LOCAL = "127.0.0.1"
 
-        /** 读系统属性 service.adb.tls.port（无线调试连接端口）。 */
+        /** 读系统属性 service.adb.tls.port（无线调试连接端口）。
+         *  注意：`System.getProperty` 读的是 JVM 属性，对 Android 系统属性无效；
+         *  因此再尝试 `getprop`（未 trusted_app 可执行系统命令），两者都拿不到返回 null。 */
         object ServiceProps {
-            fun connectPort(): Int? = runCatching {
-                System.getProperty("service.adb.tls.port")?.toIntOrNull()
-            }.getOrNull()
+            fun connectPort(): Int? {
+                System.getProperty("service.adb.tls.port")?.toIntOrNull()?.let { if (it in 1..65535) return it }
+                return runCatching {
+                    val p = ProcessBuilder("getprop", "service.adb.tls.port")
+                        .redirectErrorStream(true)
+                        .start()
+                    val out = p.inputStream.bufferedReader().readText().trim()
+                    p.waitFor()
+                    out.toIntOrNull()?.takeIf { it in 1..65535 }
+                }.getOrNull()
+            }
         }
     }
 }
