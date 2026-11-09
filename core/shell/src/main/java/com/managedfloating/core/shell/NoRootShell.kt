@@ -146,6 +146,9 @@ class NoRootShell(private val context: Context) {
     @Volatile
     var lastError: Throwable? = null; private set
 
+    /** 本次进程里最近一次实际连上的无线调试端口（自动发现路径缓存；未连过为 null）。 */
+    fun lastConnectPort(): Int? = AndroidAdbPortCache.load()
+
     companion object {
         const val LOCAL = "127.0.0.1"
 

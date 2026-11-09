@@ -124,6 +124,10 @@ fun PairingWizard(onDone: () -> Unit) {
             error = "没有自动找到配对入口，请把屏幕上显示的端口号填到下面"
             return
         }
+        if (port !in 1..65535) {
+            error = "配对端口须在 1~65535 之间"
+            return
+        }
         pairing = true
         error = null
         val app = context.applicationContext

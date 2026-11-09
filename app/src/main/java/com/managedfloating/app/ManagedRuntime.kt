@@ -156,7 +156,9 @@ object ManagedRuntime {
                 com.managedfloating.core.server.MfaLog.i(
                     "Runtime", "session ready port=$connectPort ${width}x$height")
                 synchronized(stateLock) { c.vdSession = session }
-                connectPort?.let { p -> com.managedfloating.core.server.ServerConfig(ctx).connectPort = p }
+                // 显式端口或自动发现到的实际端口都要持久化，保证下次恢复会话/不卡在“请先配置端口”（102-quick-start I1）。
+                val usedPort = connectPort ?: sh.lastConnectPort()
+                usedPort?.let { p -> com.managedfloating.core.server.ServerConfig(ctx).connectPort = p }
                 // 自动打开无线调试：重启/换 Wi-Fi 后系统会关掉它，配对好的 shell 权限可在会话成功时补写
                 // adb_wifi_enabled（尽力而为，失败只记日志不阻塞会话，见 102-quick-start）。
                 Thread {
