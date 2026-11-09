@@ -179,6 +179,13 @@ fun PairingWizard(onDone: () -> Unit) {
     fun startOver() {
         step = WizardStep.DEVELOPER_OPTIONS.ordinal
         error = null
+        // 重新配对时清掉上一轮的输入与状态，避免残留误导。
+        code = ""
+        manualPort = ""
+        connectPortInput = ""
+        pairDone = false
+        autoPairPort = null
+        discoveringPort = false
     }
 
     Column(
