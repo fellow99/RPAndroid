@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用图标背景：深灰石板色，衬托银色机器人 + 琥珀色圆盘 -->
+    <color name="ic_launcher_background">#2E3B48</color>
+</resources>
