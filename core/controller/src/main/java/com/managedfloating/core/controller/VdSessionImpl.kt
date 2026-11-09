@@ -62,7 +62,7 @@ class VdSessionImpl(
             "CLASSPATH=$apk exec app_process /system/bin com.managedfloating.core.shell.vd.VdHelper " +
             "${ipcDir.absolutePath} $width $height $dpi"
 
-        // 首选：Surface 交接（Mika 式）——先建 FrameHub 并把 Surface 交给 provider，再拉起助手。
+        // 首选：Surface 交接——先建 FrameHub 并把 Surface 交给 App 导出的 ContentProvider，再拉起助手。
         val fh = FrameHub(width, height)
         val nonce = MfaHandoff.prepare(fh.surface)
         shell.startHelper("$baseCmd --nonce $nonce")

@@ -14,7 +14,7 @@ import java.io.FileOutputStream;
 
 /**
  * M1-1 shell helper v2 (app_process, shell uid 2000).
- * Uses Mika's approach: public DisplayManager.createVirtualDisplay built with a
+ * Uses a public DisplayManager.createVirtualDisplay built with a
  * shell (com.android.shell) context + full hidden flags + ImageReader capture.
  *
  * Usage: app_process /system/bin helper.HelperMain <w> <h> <dpi> <package> [component]

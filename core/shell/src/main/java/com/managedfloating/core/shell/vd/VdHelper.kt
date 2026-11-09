@@ -147,7 +147,7 @@ object VdHelper {
     }
 
     /**
-     * 经 App 导出的 ContentProvider 拉取待交接 Surface（Mika 式）：用 ActivityManager.getContentProviderExternal
+     * 经 App 导出的 ContentProvider 拉取待交接 Surface：用 ActivityManager.getContentProviderExternal
      * 拿到 provider 的 binder，以 AttributionSource(shell) 身份 call——跨 UID Binder 事务天然携带 Parcelable Surface。
      * 普通 Context#contentResolver.call 会因“package 与 uid 不匹配”(shell 包名/uid 归属问题)被拒。
      */

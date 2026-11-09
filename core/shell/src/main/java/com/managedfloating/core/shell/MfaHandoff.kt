@@ -7,7 +7,7 @@ import android.view.Surface
  *
  * 背景（007-webrtc）：为让虚拟屏帧直接落在 App 进程（FrameHub），助手需要用 **App 进程的 Surface** 建虚拟屏。
  * Surface 含 Binder，无法经 Parcel.marshall 塞进 socket/文件（RuntimeException），只能走真正的 Binder 事务。
- * 本方案复刻 Mika 的通道思路：助手（shell）经 App 导出的 ContentProvider `call()` 拉取 Surface——
+ * 本方案采用 ContentProvider 交接通道：助手（shell）经 App 导出的 ContentProvider `call()` 拉取 Surface——
  * 这是一次跨 UID 的 Binder 事务，`Bundle` 允许携带 Parcelable Surface；App 在进程内持有"待取 Surface"，
  * 助手取到即用它建虚拟屏（帧直达 App），取不到则回退旧路径（助手自持 ImageReader + 文件 IPC）。
  *

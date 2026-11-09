@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# M1-1 verify v2: create VD (Mika method), host Settings, capture frame via ImageReader.
+# M1-1 verify v2: create public VD, host Settings, capture frame via ImageReader.
 CLASSPATH=/data/local/tmp/helper.dex app_process /system/bin helper.HelperMain 720 1560 400 com.android.settings .Settings >/data/local/tmp/vd.log 2>&1 &
 HELPER_PID=$!
 sleep 16
