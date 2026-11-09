@@ -57,7 +57,7 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/health` | 健康检查（无需鉴权），返回 `ok/service/port/authEnabled` |
-| GET | `/status` | 运行状态：会话/鉴权/SDK/设备/无障碍/缓存端口/流客户端数/RTC peers/`runningTaskId` |
+| GET | `/status` | 运行状态：会话/鉴权/SDK/设备/无障碍/缓存端口/流客户端数/RTC peers/`runningTaskId`/`mode`（`A`=虚拟屏承载、`B`=主屏承载） |
 | GET | `/logs` | 最近 500 条统一日志，可选 `?level=E/W/I/D` |
 | POST | `/logs/clear` | 清空日志缓冲 |
 | GET | `/client` | 播控客户端页面（无需鉴权，见 [Client.md](./Client.md)） |
@@ -77,6 +77,9 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 | POST | `/action/key` | 按键注入，body：`{"code":4}`（MJPEG 降级模式按键） |
 | POST | `/action/text` | 文本输入，body：`{"text":"北京"}`（ASCII 走系统 input text；非 ASCII 走剪贴板+粘贴） |
 | GET | `/ui` | 界面元素树（JSON，需启用无障碍服务；不可用时 503） |
+| POST | `/mode` | **承载模式（010-display-mode）**：body `{"mode":"A"}`；仅允许 B→A（释放投影回虚拟屏）。A→B 需在 App UI 经系统授权弹窗（无法静默），故 A→B 返回错误。返回 `{"ok":true,"mode":"A"}` 或拒绝原因 |
+
+> 010-display-mode 说明：`mode=A`（虚拟屏承载，默认）时 `/frame`、`/action/*` 作用于私有虚拟屏；`mode=B`（主屏承载）时帧源为 MediaProjection 捕获的主屏、`/action/*` 作用于主屏（a11y 手势优先 + `input -d 0` 兜底），`/ui` 直接返回主屏被托管 App 控件树。坐标以 `GET /status` 返回的分辨率（`vScreenWidth`/`vScreenHeight` 或主屏尺寸）为准。
 
 ### 4.3 自动化服务任务
 | 方法 | 路径 | 说明 |

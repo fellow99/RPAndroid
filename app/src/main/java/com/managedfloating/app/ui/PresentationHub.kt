@@ -28,6 +28,15 @@ object PresentationHub {
     var runningTaskId by mutableStateOf<String?>(null)
         private set
 
+    /** 010-display-mode：当前承载模式（A 虚拟屏承载 / B 主屏承载），供 UI 展示「主屏」状态。 */
+    var displayMode by mutableStateOf<com.managedfloating.core.controller.DisplayMode>(
+        com.managedfloating.core.controller.DisplayMode.VIRTUAL)
+        private set
+
+    fun updateDisplayMode(mode: com.managedfloating.core.controller.DisplayMode) {
+        displayMode = mode
+    }
+
     fun hostApp(app: AppInfo) {
         hostedApp = app
         presentationMode = PresentationMode.EMBEDDED

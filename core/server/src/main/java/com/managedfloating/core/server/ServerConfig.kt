@@ -40,6 +40,14 @@ class ServerConfig(context: Context) {
         set(v) = prefs.edit().putInt(KEY_VD, v).apply()
 
     /**
+     * 当前承载模式（010-display-mode）：`"A"` 虚拟屏承载（默认）/ `"B"` 主屏承载。
+     * 首次启动默认 A；持久化以便重启后恢复上次模式。
+     */
+    var displayMode: String
+        get() = prefs.getString(KEY_MODE, "A") ?: "A"
+        set(v) = prefs.edit().putString(KEY_MODE, v).apply()
+
+    /**
      * 是否已完成首次配对（102-quick-start）。
      * 与 [connectPort] 一起决定首次使用向导是否显示：`!paired && connectPort == 0` 时展示向导。
      */
@@ -56,6 +64,7 @@ class ServerConfig(context: Context) {
         private const val KEY_VH = "v_screen_h"
         private const val KEY_VD = "v_screen_dpi"
         private const val KEY_PAIRED = "paired"
+        private const val KEY_MODE = "display_mode"
 
         /** 请求头名。 */
         const val HEADER = "X-Auth-Token"

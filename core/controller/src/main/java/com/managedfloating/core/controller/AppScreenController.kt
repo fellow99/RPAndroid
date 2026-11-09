@@ -25,6 +25,43 @@ class AppScreenController(private val context: Context) : ScreenController {
     /** 界面读取器（由 app 注入无障碍服务实现）。 */
     @Volatile var uiReader: (() -> String?)? = null
 
+    // ===== 010-display-mode：承载模式（A 虚拟屏 / B 主屏）=====
+    /** 当前承载模式；首启默认虚拟屏承载（A）。 */
+    @Volatile var displayMode: DisplayMode = DisplayMode.VIRTUAL
+
+    /** MediaProjection 授权态（Mode B 前置）。 */
+    @Volatile var projectionAuth: ProjectionAuth = ProjectionAuth.NONE
+
+    /** Mode B 的主屏帧源（MediaProjection 捕获），由 app 层 MediaProjectionHost 注入。 */
+    @Volatile var projectionFrameSource: FrameSource? = null
+
+    /** Mode B 主屏操作注入（a11y 手势 + input -d 0），由 app 层注入。 */
+    @Volatile var mainOps: MainScreenOps? = null
+
+    /** 模式变化回调（app 层发布到 UI / 通知 / 持久化）。 */
+    @Volatile var onDisplayModeChanged: ((DisplayMode) -> Unit)? = null
+
+    /** 持久化回调（app 层接 ServerConfig.displayMode；符合 C-3，controller 不依赖 server）。 */
+    @Volatile var persistDisplayMode: ((DisplayMode) -> Unit)? = null
+
+    /** 正在运行自动化任务的判定（app 层注入 TaskRuntime.runningTaskId）。 */
+    @Volatile var hasRunningTask: (() -> Boolean)? = null
+
+    /**
+     * 切换承载模式：先做守卫（运行自动化任务时禁止切换，FR-010-005），再更新模式并持久化/通知。
+     * 返回 null 表示可切换；否则返回拒绝原因（调用方在切换前应以此判断）。
+     */
+    fun switchDisplayMode(target: DisplayMode): String? {
+        if (target == displayMode) return null
+        if (hasRunningTask?.invoke() == true) {
+            return "拒绝切换：自动化任务正在运行（runningTaskId != null）"
+        }
+        displayMode = target
+        persistDisplayMode?.invoke(target)
+        onDisplayModeChanged?.invoke(target)
+        return null
+    }
+
     /** 当前承载的 App（由远程/UI 任意来源经 [launch] 成功后更新）；会话/主状态同步用。 */
     @Volatile var hostedPkg: String? = null
         private set
@@ -82,6 +119,20 @@ class AppScreenController(private val context: Context) : ScreenController {
     }
 
     override fun launch(packageName: String, component: String?): LaunchResult {
+        if (displayMode == DisplayMode.MAIN) {
+            val ops = mainOps ?: return LaunchResult(false, message = HELPER_UNAVAILABLE)
+            return try {
+                val r = ops.launch(packageName, component)
+                if (r.ok) {
+                    hostedPkg = packageName
+                    hostedLabel = runCatching { pm.getApplicationInfo(packageName, 0).loadLabel(pm).toString() }.getOrNull()
+                    onHostChanged?.invoke()
+                }
+                r
+            } catch (e: Exception) {
+                LaunchResult(false, message = e.message ?: "launch error")
+            }
+        }
         val s = vdSession ?: return LaunchResult(false, message = HELPER_UNAVAILABLE)
         return try {
             val r = s.launch(packageName, component)
@@ -102,11 +153,19 @@ class AppScreenController(private val context: Context) : ScreenController {
     }
 
     override fun tap(x: Int, y: Int): Boolean {
+        if (displayMode == DisplayMode.MAIN) {
+            val ops = mainOps ?: return false
+            return try { ops.tap(x, y) } catch (e: Exception) { false }
+        }
         val s = vdSession ?: return false
         return try { s.tap(x, y) } catch (e: Exception) { false }
     }
 
     override fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durMs: Int): Boolean {
+        if (displayMode == DisplayMode.MAIN) {
+            val ops = mainOps ?: return false
+            return try { ops.swipe(x1, y1, x2, y2, durMs) } catch (e: Exception) { false }
+        }
         val s = vdSession ?: return false
         return try { s.swipe(x1, y1, x2, y2, durMs) } catch (e: Exception) { false }
     }
@@ -114,18 +173,29 @@ class AppScreenController(private val context: Context) : ScreenController {
     override fun back(): Boolean = pressKey(android.view.KeyEvent.KEYCODE_BACK)
 
     override fun pressKey(keyCode: Int): Boolean {
+        if (displayMode == DisplayMode.MAIN) {
+            val ops = mainOps ?: return false
+            return try { ops.pressKey(keyCode) } catch (e: Exception) { false }
+        }
         val s = vdSession ?: return false
         return try { s.pressKey(keyCode) } catch (e: Exception) { false }
     }
 
     /**
      * 文本注入：
-     * - ASCII：交给助手执行 `input -d <display> text`（可靠、无剪贴板副作用）；
+     * - ASCII：交给目标显示执行 `input text`（可靠、无剪贴板副作用）；
      * - 非 ASCII（中文等）：写系统剪贴板 + 注入 KEYCODE_PASTE（
-     *   虚拟屏上的无障碍 ACTION_SET_TEXT 在部分 ROM 不可用，故走粘贴）。
+     *   部分 ROM 无障碍 ACTION_SET_TEXT 不可用，故走粘贴）。
      */
     override fun text(text: String): Boolean {
         if (text.isEmpty()) return true
+        if (displayMode == DisplayMode.MAIN) {
+            val ops = mainOps ?: return false
+            return try {
+                if (text.all { it.code in 0x20..0x7E }) ops.text(text)
+                else pasteViaClipboard(text) && ops.pressKey(android.view.KeyEvent.KEYCODE_PASTE)
+            } catch (e: Exception) { false }
+        }
         val s = vdSession ?: return false
         return try {
             if (text.all { it.code in 0x20..0x7E }) {
@@ -151,7 +221,10 @@ class AppScreenController(private val context: Context) : ScreenController {
 
     override fun readUi(): String? = runCatching { uiReader?.invoke() }.getOrNull()
 
-    override fun frameSource(): FrameSource? = vdSession?.frameSource()
+    override fun frameSource(): FrameSource? = when (displayMode) {
+        DisplayMode.MAIN -> projectionFrameSource
+        DisplayMode.VIRTUAL -> vdSession?.frameSource()
+    }
 
     override fun isSessionActive(): Boolean = vdSession != null
 
@@ -163,6 +236,20 @@ class AppScreenController(private val context: Context) : ScreenController {
         internal object IntentAction { const val ACTION_MAIN = "android.intent.action.MAIN" }
         internal object IntentCat { const val CATEGORY_LAUNCHER = "android.intent.category.LAUNCHER" }
     }
+}
+
+/**
+ * Mode B 主屏操作注入（010-display-mode）。
+ * 由 app 层以「a11y dispatchGesture + input -d 0」实现，供 [AppScreenController] 在
+ * [`displayMode == MAIN`] 时分派（遵守 C-1 单一操作入口）。
+ */
+interface MainScreenOps {
+    fun tap(x: Int, y: Int): Boolean
+    fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durMs: Int): Boolean
+    fun pressKey(keyCode: Int): Boolean
+    /** 注入文本（ASCII 走 input text；中文由 [AppScreenController.text] 走剪贴板+PASTE）。 */
+    fun text(text: String): Boolean
+    fun launch(packageName: String, component: String?): LaunchResult
 }
 
 /**

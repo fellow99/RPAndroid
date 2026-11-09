@@ -43,13 +43,24 @@ object ManagedRuntime {
             controllerRef = controller
             shellRef = shell
             controller.uiReader = { com.managedfloating.app.a11y.MfaAccessibilityService.instance?.dumpUi() }
+            // 010-display-mode：承载模式初始化与持久化（C-3：controller 不依赖 server，经回调持久化）。
+            val cfg = ServerConfig(app)
+            controller.displayMode = com.managedfloating.core.controller.DisplayMode.fromWire(cfg.displayMode)
+            controller.persistDisplayMode = { m -> cfg.displayMode = m.wire }
+            controller.hasRunningTask = { com.managedfloating.app.script.TaskRuntime.runningTaskId != null }
+            controller.mainOps = com.managedfloating.app.ModeBOps(app, shell)
             // 承载状态同步：REST(/client) 的 /session/launch 经 controller.launch 成功后回调，
             // 把变化发布到 App UI（应用栏自动切换呈现 / 回到网格）。与 App UI 自身发起共用同一入口。
             controller.onHostChanged = {
                 com.managedfloating.app.ui.PresentationHub.setHosted(controller.hosted())
             }
+            // 模式变化：同步 UI；若正处 Mode B 还更新主屏承载通知文案。
+            controller.onDisplayModeChanged = { m ->
+                com.managedfloating.app.ui.PresentationHub.updateDisplayMode(m)
+                com.managedfloating.core.server.MfaLog.i("Runtime", "display mode -> ${m.wire}")
+            }
+            com.managedfloating.app.ui.PresentationHub.updateDisplayMode(controller.displayMode)
             ManagedBridge.bind(controller)
-            val cfg = ServerConfig(app)
             val s = ManagedServer(
                 controller, cfg.port, shell,
                 appContext = app,
@@ -60,6 +71,8 @@ object ManagedRuntime {
                         "accessibilityEnabled" to com.managedfloating.app.a11y.MfaAccessibilityService.isEnabled(),
                         "cachedConnectPort" to cfg.connectPort,
                         "runningTaskId" to com.managedfloating.app.script.TaskRuntime.runningTaskId,
+                        // 010-display-mode：当前承载模式（A 虚拟屏 / B 主屏）
+                        "mode" to controller.displayMode.wire,
                         // 供客户端(/client)在无会话时用缓存端口自动建立会话
                         "vScreenWidth" to cfg.vScreenWidth,
                         "vScreenHeight" to cfg.vScreenHeight,

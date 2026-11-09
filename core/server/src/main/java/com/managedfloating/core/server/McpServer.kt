@@ -114,8 +114,15 @@ class McpServer(
             listOf("text"),
         )
         tool(
-            "status", "Session status: sessionActive, hosted app, virtual screen size/dpi, running task, accessibility",
+            "status", "Session status: sessionActive, hosted app, virtual screen size/dpi, running task, accessibility, mode (A=virtual/B=main)",
             JSONObject(), emptyList(),
+        )
+        tool(
+            "switch_mode",
+            "Switch hosting mode: B->A (release projection, hosted app back to virtual screen) is allowed directly; " +
+                "A->B requires MediaProjection authorization via the App UI (cannot be silent), so A->B returns an error telling the user to tap Main-screen in the app",
+            JSONObject().put("mode", prop("string", "target mode: A or B")),
+            listOf("mode"),
         )
         tool(
             "app_close", "Close the currently hosted app on the virtual screen (keeps the session, returns to app list)",
@@ -216,6 +223,19 @@ class McpServer(
             else "ok=${controller.text(args.optString("text"))}"
         }
         "status" -> statusJson()
+        "switch_mode" -> {
+            val ctl = controller as? com.managedfloating.core.controller.AppScreenController
+            if (ctl == null) "error: unsupported controller (switch_mode requires AppScreenController)"
+            else {
+                val target = com.managedfloating.core.controller.DisplayMode.fromWire(args.optString("mode"))
+                if (target == com.managedfloating.core.controller.DisplayMode.MAIN) {
+                    "ok=false A->B requires MediaProjection authorization via App UI (无法静默授权); tap Main-screen in the app"
+                } else {
+                    val denied = ctl.switchDisplayMode(target)
+                    if (denied != null) "ok=false $denied" else "ok=true mode=${ctl.displayMode.wire}"
+                }
+            }
+        }
         "app_close" -> {
             val ctl = controller
             if (ctl is com.managedfloating.core.controller.AppScreenController) {

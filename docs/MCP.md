@@ -65,7 +65,7 @@ curl -X POST http://localhost:8099/mcp \
 
 标准错误码：JSON 解析失败 `-32700`；未知方法 `-32601`；HTTP 鉴权失败 `401`。
 
-## 4. 工具清单（19 个）
+## 4. 工具清单（20 个）
 
 以 `tools/list` 实时返回为准。屏幕类工具需要先建立托管会话（见 §5）。
 
@@ -78,7 +78,10 @@ curl -X POST http://localhost:8099/mcp \
 | `screen_swipe` | 虚拟屏滑动 | `x1*`,`y1*`,`x2*`,`y2*`，可选 `durMs`（默认 300） |
 | `screen_key` | 注入按键 | `code?`（KeyEvent keycode，优先）或 `name?`（`back/home/enter/del/paste/tab/esc/space/up/down/left/right/volume_up/volume_down/power/menu/search`） |
 | `screen_text` | 向焦点输入框写入文本（支持中文） | `text*` |
-| `status` | 会话/承载/虚拟屏分辨率/运行中任务/无障碍等状态 | 无 |
+| `status` | 会话/承载/虚拟屏分辨率/运行中任务/无障碍/mode（`A`=虚拟屏承载、`B`=主屏承载）等状态 | 无 |
+| `switch_mode` | 切换承载模式：`B→A`（释放投影、回虚拟屏承载）可直接；`A→B` 需经 App UI 系统授权弹窗（无法静默），返回错误提示在 App 内点「主屏承载」 | `mode*`（`A`/`B`） |
+
+> 010-display-mode 说明：`mode=A`（默认虚拟屏承载）时 `screen_*`/`app_launch` 作用于私有虚拟屏；`mode=B`（主屏承载）时帧源为 MediaProjection 主屏、操作作用于主屏（a11y 手势优先 + `input -d 0` 兜底）、`ui_read` 直接返回主屏被托管 App 控件树。坐标以 `status.mode` 对应的分辨率为准。
 
 > 坐标口径：以 `status`（或脚本 `screen.info`）返回的 `vScreenWidth/vScreenHeight` 为准，随设备方向变化。
 > `screen_text`：ASCII 走系统 `input text`；非 ASCII 走“剪贴板 + 粘贴键”，调用前需先让输入框获得焦点。

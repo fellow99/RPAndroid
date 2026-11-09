@@ -155,6 +155,35 @@ class ManagedServer(
                     }
                 }
 
+                // 010-display-mode：切换承载模式（body {"mode":"A"|"B"}）。
+                // 注意：这里的 B 模式切换**仅更新状态机并同步坐标系**；实际 MediaProjection 授权
+                // 必须由 App UI（「主屏」按钮）经系统弹窗发起（无法静默授权）。
+                // B→A 可直接切换（释放投影由 App 层 onDenied 负责）。
+                post("/mode") {
+                    val ctl = controller as? com.managedfloating.core.controller.AppScreenController
+                    if (ctl == null) {
+                        call.respond(HttpStatusCode.ServiceUnavailable, mapOf("ok" to false, "error" to "no controller"))
+                        return@post
+                    }
+                    val body = mapper.readValue<ModeReq>(call.receive<String>())
+                    val target = com.managedfloating.core.controller.DisplayMode.fromWire(body.mode)
+                    // B 需先经授权；仅允许 B→A 直接切换，A→B 必须由 App UI 授权弹窗触发（见下）。
+                    if (target == com.managedfloating.core.controller.DisplayMode.MAIN) {
+                        call.respond(mapOf(
+                            "ok" to false,
+                            "error" to "mode B requires MediaProjection authorization via App UI (无法静默授权)",
+                            "mode" to ctl.displayMode.wire,
+                        ))
+                        return@post
+                    }
+                    val denied = ctl.switchDisplayMode(target)
+                    if (denied != null) {
+                        call.respond(mapOf("ok" to false, "error" to denied, "mode" to ctl.displayMode.wire))
+                    } else {
+                        call.respond(mapOf("ok" to true, "mode" to ctl.displayMode.wire))
+                    }
+                }
+
                 get("/ui") {
                     val ui = withContext(Dispatchers.IO) { controller.readUi() }
                     if (ui == null) call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "ui unavailable (enable accessibility service)"))
@@ -450,6 +479,8 @@ class ManagedServer(
     data class SwipeReq(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val durMs: Int? = null)
     data class KeyReq(val code: Int)
     data class TextReq(val text: String)
+    // 010-display-mode：模式切换请求体
+    data class ModeReq(val mode: String)
     data class PairReq(
         val host: String,
         val pairPort: Int,
