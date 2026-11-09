@@ -91,7 +91,7 @@ fun AppsScreen(onOpenSettings: () -> Unit) {
             Handler(Looper.getMainLooper()).post {
                 connecting = false
                 sessionActive = ManagedBridge.controller()?.isSessionActive() == true
-                message = if (ok && sessionActive) null else "连接失败：请检查端口/配对后重试"
+                message = if (ok && sessionActive) null else connectFailureHint(context)
             }
         }.apply { name = "mfa-connect"; isDaemon = true }.start()
     }

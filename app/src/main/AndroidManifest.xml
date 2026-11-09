@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -12,6 +13,13 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 首次配对后可自动重新打开无线调试（重启/换 Wi-Fi 后系统会关掉它）。
+         该权限不会在使用中弹框，需用户用电脑一次性授权：
+         adb shell pm grant com.managedfloating.app android.permission.WRITE_SECURE_SETTINGS
+         未授权时功能自动降级（仅能经已建立的 shell 会话补写）。 -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- Android 11+ 包可见性：声明“枚举所有带启动器的应用/读其图标”的意图查询，
          否则 queryIntentActivities(MAIN/LAUNCHER) 只会返回部分系统应用。

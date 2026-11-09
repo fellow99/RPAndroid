@@ -84,6 +84,7 @@ fun ConnectContent(
     onConnectWithPort: ((Int?) -> Unit)? = null,
 ) {
     var portText by remember { mutableStateOf(savedPort.takeIf { it > 0 }?.toString() ?: "") }
+    val context = androidx.compose.ui.platform.LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -134,6 +135,16 @@ fun ConnectContent(
             OutlinedButton(onClick = { onConnectWithPort(portText.trim().toIntOrNull()?.takeIf { it in 1..65535 }) }) {
                 Text("用此端口连接")
             }
+            Spacer(Modifier.height(4.dp))
+            OutlinedButton(onClick = {
+                // 系统里没开无线调试时，直接跳到开发者选项手动打开（无 WRITE_SECURE_SETTINGS 时的兑底）。
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            }) { Text("去开启无线调试") }
         }
     }
 }
@@ -152,4 +163,21 @@ fun SessionUnavailable(msg: String, actionLabel: String? = null, onAction: (() -
             OutlinedButton(onClick = onAction) { Text(actionLabel) }
         }
     }
+}
+
+/**
+ * 连接失败时给用户的下一步提示（区分最常见的三类原因），尽量说人话。
+ * - 没连 Wi-Fi：无线调试必须 Wi-Fi；
+ * - 无线调试关着：重启/换 Wi-Fi 后系统会关掉；
+ * - 其它：端口变了，填「无线调试页顶部端口」重试。
+ */
+internal fun connectFailureHint(context: android.content.Context): String {
+    val app = context.applicationContext
+    if (!com.managedfloating.app.WirelessDebugging.hasWifi(app)) {
+        return "连接失败：请先连接 Wi-Fi（无线调试需要 Wi-Fi）。"
+    }
+    if (!com.managedfloating.app.WirelessDebugging.isEnabled(app)) {
+        return "连接失败：无线调试没有打开。请在 设置 › 开发者选项 里打开它，再回来重试。"
+    }
+    return "连接失败：无线调试的端口可能变了，请把 无线调试 页顶部那一行的端口填到下面重试。"
 }

@@ -87,6 +87,8 @@ object ManagedRuntime {
             val h = cfg.vScreenHeight.takeIf { it > 0 } ?: dm.heightPixels
             val d = cfg.vScreenDpi.takeIf { it > 0 } ?: dm.densityDpi
             Thread {
+                // 重启/换 Wi-Fi 后系统会关掉无线调试；持有 WRITE_SECURE_SETTINGS 时先把它写回开。
+                runCatching { WirelessDebugging.ensureEnabled(context.applicationContext) }
                 runCatching { startSession(savedPort, w, h, d) }.onSuccess { ok ->
                     com.managedfloating.core.server.MfaLog.i(
                         "Runtime", "auto-resume session port=$savedPort ${w}x$h dpi=$d ok=$ok")
@@ -128,6 +130,8 @@ object ManagedRuntime {
         val c = controllerRef ?: return false
         val sh = shellRef ?: return false
         val ctx = appContext ?: return false
+        // 连前先确保无线调试开着（重启/换 Wi-Fi 后系统会关掉；持 WRITE_SECURE_SETTINGS 时直接写开）。
+        runCatching { com.managedfloating.app.WirelessDebugging.ensureEnabled(ctx) }
         // 新会话开始前重置承载状态（旧承载随旧会话失效；同步 App UI）
         c.clearHosted()
         // 释放旧会话持有的帧源/线程（新会话接管前）
