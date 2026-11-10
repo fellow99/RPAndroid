@@ -28,9 +28,10 @@ object TaskScriptDocs {
 | packageName | string? | 目标 App 包名（可选，用于任务前自动承载） |
 | script | string | JS 脚本内容（见下） |
 | enabled | boolean | 是否启用；false 时撤销其定时调度 |
-| kind | string | 调度方式：IMMEDIATE（立即）/ INTERVAL（间隔）/ CRON（cron 表达式） |
-| intervalMs | number | kind=INTERVAL 时的间隔毫秒，需 >0 |
-| cron | string | kind=CRON 时的 cron 表达式：5 字段 `分 时 日 月 周`，或 6 字段 `秒 分 时 日 月 周` |
+| kind | string | 调度方式：IMMEDIATE（立即）/ INTERVAL（间隔，秒）/ SCHEDULED（固定日期时间，runAt）/ CRON（保留） |
+| intervalSec | number | kind=INTERVAL 时的间隔（**秒**），需 >0 |
+| runAt | number | kind=SCHEDULED 时的执行时刻（epoch 毫秒，需晚于当前） |
+| cron | string | kind=CRON 时的 cron 表达式（保留，未在 UI 暴露）：5 字段 `分 时 日 月 周`，或 6 字段 `秒 分 时 日 月 周` |
 
 > cron 6 字段用于“每分钟第 00 秒”这类需求：`0 * * * * *`。
 

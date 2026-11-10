@@ -90,8 +90,9 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 | POST | `/tasks/{id}/run` | 立即执行任务（互斥：已在执行其它任务时返回 `ok:false`） |
 | POST | `/tasks/{id}/stop` | 停止任务的执行/调度 |
 
-任务对象字段：`id,name,packageName,script,enabled,kind,intervalMs,cron`（另含运行统计 `lastRunAt,nextRunAt,runCount,lastStatus`）；
-`kind` 取值 `IMMEDIATE` / `INTERVAL` / `CRON`。执行状态见 `GET /status` 的 `runningTaskId`。
+任务对象字段：`id,name,packageName,script,enabled,kind,intervalSec,runAt`（另含运行统计 `lastRunAt,nextRunAt,runCount,lastStatus`）；
+`kind` 取值 `IMMEDIATE` / `INTERVAL`（间隔**秒**，字段 `intervalSec`）/ `SCHEDULED`（固定日期时间，字段 `runAt`=epoch 毫秒）；
+`CRON` 暂在 UI 隐藏但保留后端。执行状态见 `GET /status` 的 `runningTaskId`。
 
 - `cron` 支持 5 字段（`分 时 日 月 周`）与 6 字段（`秒 分 时 日 月 周`）；“每分钟第 00 秒”用 `0 * * * * *`。
 - 定时触发会占用全局唯一运行态（与手动 run 互斥）并更新 `runCount/lastRunAt`；完成后 watchdog 回写 `lastStatus`。

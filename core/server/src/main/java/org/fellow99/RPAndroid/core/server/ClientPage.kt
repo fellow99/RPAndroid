@@ -114,6 +114,16 @@ object ClientPage {
   .box .row .btn { flex:1; }
   .box .btn.primary { background:#1a73e8; }
   .modal-scroll { max-height:70vh; overflow-y:auto; }
+  .box.wide { width:min(60em, 94vw); max-width:96vw; }
+  .form .fr { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .form .fl { flex:none; width:8em; font-size:13px; color:#9aa0a6; text-align:left; }
+  .form .fc { flex:1; min-width:0; margin:4px 0; }
+  .form .pkgrow { display:flex; gap:8px; align-items:center; }
+  .form .pkgrow input { flex:1; margin:0; }
+  .apppicker { display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:8px;
+               max-height:34vh; overflow-y:auto; border:1px solid #333; border-radius:10px;
+               padding:8px; margin-top:6px; width:100%; }
+  .apppicker .tile { margin:0; }
   .footer { border-top:1px solid #2a2e39; padding:8px 14px; display:flex; gap:8px; align-items:center; }
   .footer select { width:auto; }
   .empty { color:#6b7280; text-align:center; padding:30px 0; }
@@ -199,25 +209,33 @@ object ClientPage {
 </div>
 
 <div class="blocker" id="editModal" style="display:none">
-  <div class="box modal-scroll">
+  <div class="box wide modal-scroll">
     <h2 id="editTitle">编辑自动化</h2>
-    <label>名称</label>
-    <input type="text" id="f_name"/>
-    <label>目标 App（packageName，可选）</label>
-    <input type="text" id="f_pkg" placeholder="com.android.settings"/>
-    <label><input type="checkbox" id="f_enabled" style="width:auto"/> 启用</label>
-    <label>执行方式</label>
-    <select id="f_kind">
-      <option value="IMMEDIATE">立即执行</option>
-      <option value="INTERVAL">间隔执行</option>
-      <option value="CRON">cron 定时</option>
-    </select>
-    <label>间隔毫秒（INTERVAL）</label>
-    <input type="number" id="f_interval" placeholder="60000"/>
-    <label>cron 表达式（CRON）</label>
-    <input type="text" id="f_cron" placeholder="0 * * * * *"/>
-    <label>自动化脚本（JS）</label>
-    <textarea id="f_script"></textarea>
+    <div class="form">
+      <div class="fr"><span class="fl">名称</span><input type="text" id="f_name" class="fc"/></div>
+      <div class="fr">
+        <span class="fl">目标 App</span>
+        <span class="fc">
+          <span class="pkgrow">
+            <input type="text" id="f_pkgLabel" readonly placeholder="未选择"/>
+            <button class="btn" id="btnPickApp" type="button">选择</button>
+          </span>
+          <span class="apppicker" id="appPicker" style="display:none"></span>
+        </span>
+      </div>
+      <div class="fr"><span class="fl">启用</span><span class="fc"><input type="checkbox" id="f_enabled" style="width:auto"/> 启用</span></div>
+      <div class="fr">
+        <span class="fl">执行方式</span>
+        <select id="f_kind" class="fc" style="width:auto">
+          <option value="IMMEDIATE">立即执行</option>
+          <option value="INTERVAL">间隔执行</option>
+          <option value="SCHEDULED">固定日期时间</option>
+        </select>
+      </div>
+      <div class="fr" id="blockInterval" style="display:none"><span class="fl">间隔（秒）</span><input type="number" id="f_interval" class="fc" min="1" placeholder="如 60"/></div>
+      <div class="fr" id="blockScheduled" style="display:none"><span class="fl">固定日期时间</span><input type="datetime-local" id="f_runat" class="fc" step="1"/></div>
+      <div class="fr"><span class="fl" style="align-self:flex-start;padding-top:12px">脚本（JS）</span><textarea id="f_script" class="fc"></textarea></div>
+    </div>
     <div class="err" id="editErr"></div>
     <div class="row">
       <button class="btn primary" id="editSave">保存</button>
@@ -245,6 +263,8 @@ object ClientPage {
   var runningLocal = null;     // 本地乐观值（点击执行后立即生效）
   var lastServerRunning = null;
   var editing = null;
+  var editingPkg = null;   // 目标 App（选择器选中的包名）
+  var appsLoaded = false;
   var activeTab = "ctrl";
   var poll = {};
 
@@ -626,7 +646,8 @@ object ClientPage {
     tasks.forEach(function (t) { box.appendChild(autoRow(t)); });
   }
   function scheduleLabel(t) {
-    if (t.kind === "INTERVAL") return "间隔 " + (t.intervalMs >= 1000 ? Math.round(t.intervalMs / 100) / 10 + " 秒" : t.intervalMs + " ms");
+    if (t.kind === "INTERVAL") return "间隔 " + (t.intervalSec || 0) + " 秒";
+    if (t.kind === "SCHEDULED") return "定时 " + fmtLocal(t.runAt);
     if (t.kind === "CRON") return "cron: " + t.cron;
     return "立即执行";
   }
@@ -710,47 +731,94 @@ object ClientPage {
       }).catch(function (e) { showToast("删除失败：" + e.message); });
   }
   function toggleTask(t, enabled) {
-    var body = { id: t.id, name: t.name, packageName: t.packageName || null, script: t.script, enabled: enabled, kind: t.kind, intervalMs: t.intervalMs, cron: t.cron };
+    var body = { id: t.id, name: t.name, packageName: t.packageName || null, script: t.script, enabled: enabled, kind: t.kind, intervalSec: t.intervalSec || 0, runAt: t.runAt || 0, cron: t.cron || "" };
     api("/tasks", { method: "POST", body: JSON.stringify(body) })
       .then(function (r) { return r.json(); })
       .then(function (res) { if (res && res.ok) { t.enabled = enabled; showToast(enabled ? "已启用" : "已停用"); renderAuto(); } else showToast("保存失败"); })
       .catch(function () { showToast("保存失败"); });
   }
+  function fmtLocal(runAt) {
+    if (!runAt) return "";
+    var d = new Date(runAt);
+    function p(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+  }
+  function syncKindFields() {
+    var k = qf("f_kind").value;
+    qf("blockInterval").style.display = k === "INTERVAL" ? "" : "none";
+    qf("blockScheduled").style.display = k === "SCHEDULED" ? "" : "none";
+  }
+  function loadAppPicker() {
+    if (appsLoaded) return;
+    appsLoaded = true;
+    var box = qf("appPicker"); box.innerHTML = "";
+    api("/apps").then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (list) {
+        if (!list) return;
+        list.forEach(function (a) {
+          appsMap[a.packageName] = a.label;
+          var d = el("div", "tile");
+          var img = document.createElement("img");
+          img.className = "tile-ico";
+          img.src = urlWithToken("/apps/" + enc(a.packageName) + "/icon");
+          d.appendChild(img);
+          d.appendChild(el("span", "tile-name", a.label));
+          d.addEventListener("click", function () { selectPkg(a); });
+          box.appendChild(d);
+        });
+      }).catch(function () {});
+  }
+  function openAppPicker() { qf("appPicker").style.display = ""; loadAppPicker(); }
+  function closeAppPicker() { qf("appPicker").style.display = "none"; }
+  function selectPkg(a) {
+    editingPkg = a.packageName;
+    qf("f_pkgLabel").value = a.label;
+    closeAppPicker();
+  }
   function openEdit(t) {
     editing = t || null;
+    editingPkg = t ? (t.packageName || null) : null;
     qf("editTitle").textContent = t ? "编辑自动化" : "新建自动化";
     qf("f_name").value = t ? t.name : "";
-    qf("f_pkg").value = t ? (t.packageName || "") : "";
+    qf("f_pkgLabel").value = (t && t.packageName) ? (appsMap[t.packageName] || t.packageName) : "";
     qf("f_enabled").checked = t ? !!t.enabled : true;
     qf("f_kind").value = t ? t.kind : "IMMEDIATE";
-    qf("f_interval").value = t ? t.intervalMs : "";
-    qf("f_cron").value = t ? t.cron : "";
+    qf("f_interval").value = t ? (t.intervalSec || "") : "";
+    qf("f_runat").value = t ? fmtLocal(t.runAt) : "";
     qf("f_script").value = t ? t.script : "// await host.invoke('screen.tap', { x: 360, y: 500 })";
     qf("editErr").textContent = "";
+    closeAppPicker();
+    syncKindFields();
     show("editModal");
   }
   function showEditErr(m) { qf("editErr").textContent = m; }
   function saveEdit() {
     var name = qf("f_name").value.trim();
     var kind = qf("f_kind").value;
-    var intervalMs = parseInt(qf("f_interval").value, 10) || 0;
-    var cron = qf("f_cron").value.trim();
+    var sec = parseInt(qf("f_interval").value, 10) || 0;
+    var runAt = 0;
+    if (kind === "SCHEDULED") {
+      var v = qf("f_runat").value;
+      if (!v) { showEditErr("请设置固定日期时间"); return; }
+      runAt = new Date(v).getTime();
+      if (!runAt || runAt <= Date.now()) { showEditErr("固定日期时间需晚于当前时刻"); return; }
+    }
     if (!name) { showEditErr("请填写任务名称"); return; }
-    if (kind === "INTERVAL" && intervalMs <= 0) { showEditErr("间隔执行需填写大于 0 的毫秒数"); return; }
+    if (kind === "INTERVAL" && sec <= 0) { showEditErr("间隔执行需填写大于 0 的秒数"); return; }
     var body = {
       name: name,
-      packageName: qf("f_pkg").value.trim() || null,
+      packageName: editingPkg || null,
       script: qf("f_script").value,
       enabled: qf("f_enabled").checked,
       kind: kind,
-      intervalMs: kind === "INTERVAL" ? intervalMs : 0,
-      cron: kind === "CRON" ? cron : ""
+      intervalSec: kind === "INTERVAL" ? sec : 0,
+      runAt: kind === "SCHEDULED" ? runAt : 0
     };
     if (editing) body.id = editing.id;
     api("/tasks", { method: "POST", body: JSON.stringify(body) })
       .then(function (r) { return r.json(); })
       .then(function (res) {
-        if (res && res.ok) { hide("editModal"); editing = null; refreshAuto(); showToast("已保存"); }
+        if (res && res.ok) { hide("editModal"); editing = null; editingPkg = null; refreshAuto(); showToast("已保存"); }
         else showEditErr("保存失败");
       }).catch(function (e) { showEditErr("保存失败：" + e.message); });
   }
@@ -794,7 +862,9 @@ object ClientPage {
     qf("autoNew").addEventListener("click", function () { openEdit(null); });
     qf("autoRefresh").addEventListener("click", refreshAuto);
     qf("editSave").addEventListener("click", saveEdit);
-    qf("editCancel").addEventListener("click", function () { hide("editModal"); editing = null; });
+    qf("editCancel").addEventListener("click", function () { hide("editModal"); editing = null; editingPkg = null; });
+    qf("f_kind").addEventListener("change", syncKindFields);
+    qf("btnPickApp").addEventListener("click", openAppPicker);
     qf("logClear").addEventListener("click", function () {
       api("/logs/clear", { method: "POST" }).then(function () { refreshLogs(); }).catch(function () {});
     });

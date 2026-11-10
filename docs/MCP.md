@@ -98,8 +98,8 @@ curl -X POST http://localhost:8099/mcp \
 |------|------|--------------------|
 | `task_list` | 列出自动化服务任务 | 无 |
 | `task_get` | 单任务详情（含 `lastRunAt/nextRunAt/runCount/lastStatus`） | `id*` |
-| `task_create` | 创建/更新任务（全量 upsert，id 可省略自动生成） | `task*`：`id,name,script,enabled,kind,intervalMs,cron` |
-| `task_modify` | 按 id **部分修改**已存在任务，保留运行统计；不存在返回错误 | `id*`，`patch*`（任意可编辑字段：`name,script,enabled,kind,intervalMs,cron,packageName`） |
+| `task_create` | 创建/更新任务（全量 upsert，id 可省略自动生成） | `task*`：`id,name,script,enabled,kind,intervalSec,runAt` |
+| `task_modify` | 按 id **部分修改**已存在任务，保留运行统计；不存在返回错误 | `id*`，`patch*`（任意可编辑字段：`name,script,enabled,kind,intervalSec,runAt,packageName`） |
 | `task_delete` | 按 id 删除任务 | `id*` |
 | `task_run` | 立即执行任务；`waitMs>0` 时等待结束并返回任务状态 | `id*`，可选 `waitMs` |
 | `task_stop` | 停止执行 + 取消已排闹钟（尽力而为） | `id*` |

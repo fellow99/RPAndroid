@@ -402,6 +402,12 @@ private fun appLabelFor(context: android.content.Context, pkg: String?): String?
 
 private fun scheduleLabel(t: ScriptTask): String = when (t.kind) {
     ScheduleKind.IMMEDIATE -> "立即执行"
-    ScheduleKind.INTERVAL -> "间隔 " + if (t.intervalMs >= 1000) "${t.intervalMs / 1000} 秒" else "${t.intervalMs} ms"
+    ScheduleKind.INTERVAL -> "间隔 ${t.intervalSec} 秒"
+    ScheduleKind.SCHEDULED -> "定时 " + scheduleAtLabel(t.runAt)
     ScheduleKind.CRON -> "cron: ${t.cron}"
+}
+
+private fun scheduleAtLabel(runAt: Long): String = if (runAt <= 0) "未设置" else {
+    val fmt = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+    fmt.format(java.util.Date(runAt))
 }

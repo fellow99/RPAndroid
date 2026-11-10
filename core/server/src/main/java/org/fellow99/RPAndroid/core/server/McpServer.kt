@@ -139,12 +139,12 @@ class McpServer(
         if (taskApi != null) {
             tool("task_list", "List automation-service tasks", JSONObject(), emptyList())
             tool(
-                "task_create", "Create/update an automation-service task (JSON: id,name,script,enabled,kind,intervalMs,cron)",
+                "task_create", "Create/update an automation-service task (JSON: id,name,script,enabled,kind,intervalSec,runAt)",
                 JSONObject().put("task", prop("object", "task object")), listOf("task"),
             )
             tool(
                 "task_modify",
-                "Partially modify an existing task by id; runtime stats are kept. Args: id plus any editable fields (name,script,enabled,kind,intervalMs,cron,packageName)",
+                "Partially modify an existing task by id; runtime stats are kept. Args: id plus any editable fields (name,script,enabled,kind,intervalSec,runAt,packageName)",
                 JSONObject()
                     .put("id", prop("string", "task id"))
                     .put("patch", prop("object", "fields to update")),

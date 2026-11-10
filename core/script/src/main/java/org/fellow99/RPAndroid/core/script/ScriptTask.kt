@@ -4,13 +4,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-/** 调度方式。 */
-enum class ScheduleKind { IMMEDIATE, INTERVAL, CRON }
+/** 调度方式。IMMEDIATE=立即；INTERVAL=间隔秒；SCHEDULED=固定日期时间；CRON=保留（UI 暂隐藏）。 */
+enum class ScheduleKind { IMMEDIATE, INTERVAL, SCHEDULED, CRON }
 
 /**
  * [ScriptTask] —— 一个**自动化服务**任务（符号名沿用历史 ScriptTask）。
- * @param script 自动化逻辑的 JS 脚本内容（可调用宿主能力 host.invoke('screen.tap', {...})）
+ * @param script 自动化逻辑的 JS 脚本内容（可调用宿主能力 host.invoke('screen.tap', {...}))
  * @param packageName 目标 App（可选；用于任务前自动承载）
+ * @param intervalSec kind=INTERVAL 时的间隔（秒）
+ * @param runAt kind=SCHEDULED 时的执行时刻（epoch 毫秒）
  */
 data class ScriptTask(
     val id: String,
@@ -19,7 +21,8 @@ data class ScriptTask(
     val script: String,
     val enabled: Boolean = true,
     val kind: ScheduleKind = ScheduleKind.IMMEDIATE,
-    val intervalMs: Long = 0,
+    val intervalSec: Long = 0,
+    val runAt: Long = 0,
     val cron: String = "",
     val lastRunAt: Long = 0,
     val nextRunAt: Long = 0,
@@ -29,7 +32,7 @@ data class ScriptTask(
     fun toJson(): String = JSONObject().apply {
         put("id", id); put("name", name); put("packageName", packageName)
         put("script", script); put("enabled", enabled); put("kind", kind.name)
-        put("intervalMs", intervalMs); put("cron", cron)
+        put("intervalSec", intervalSec); put("runAt", runAt); put("cron", cron)
         put("lastRunAt", lastRunAt); put("nextRunAt", nextRunAt)
         put("runCount", runCount); put("lastStatus", lastStatus)
     }.toString()
@@ -42,7 +45,13 @@ data class ScriptTask(
             script = o.optString("script"),
             enabled = o.optBoolean("enabled", true),
             kind = runCatching { ScheduleKind.valueOf(o.optString("kind", "IMMEDIATE")) }.getOrDefault(ScheduleKind.IMMEDIATE),
-            intervalMs = o.optLong("intervalMs"),
+            // 单位=秒；兼容旧数据 intervalMs（毫秒 → 秒），供历史任务迁移。
+            intervalSec = if (o.has("intervalSec")) o.optLong("intervalSec")
+            else {
+                val legacy = o.optLong("intervalMs", 0)
+                if (legacy > 0) (legacy / 1000).coerceAtLeast(1) else 0
+            },
+            runAt = o.optLong("runAt"),
             cron = o.optString("cron"),
             lastRunAt = o.optLong("lastRunAt"),
             nextRunAt = o.optLong("nextRunAt"),

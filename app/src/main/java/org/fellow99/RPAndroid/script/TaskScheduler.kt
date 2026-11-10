@@ -25,7 +25,11 @@ class TaskScheduler(private val ctx: Context) {
         for (t in store.all()) {
             if (!t.enabled) { cancel(t.id); continue }
             when (t.kind) {
-                ScheduleKind.INTERVAL -> if (t.intervalMs > 0) scheduleAt(t, System.currentTimeMillis() + t.intervalMs)
+                ScheduleKind.INTERVAL -> if (t.intervalSec > 0) scheduleAt(t, System.currentTimeMillis() + t.intervalSec * 1000L)
+                ScheduleKind.SCHEDULED -> {
+                    // 固定日期时间：未来时刻排一次；已过则不排。
+                    if (t.runAt > System.currentTimeMillis()) scheduleAt(t, t.runAt) else cancel(t.id)
+                }
                 ScheduleKind.CRON -> Cron.next(t.cron, System.currentTimeMillis())?.let { scheduleAt(t, it) }
                 ScheduleKind.IMMEDIATE -> Unit
             }
@@ -39,7 +43,8 @@ class TaskScheduler(private val ctx: Context) {
         val now = System.currentTimeMillis()
         val next = when {
             !t.enabled -> 0L // 停用任务手动执行一次，不排后续闹钟
-            t.kind == ScheduleKind.INTERVAL -> if (t.intervalMs > 0) now + t.intervalMs else 0L
+            t.kind == ScheduleKind.INTERVAL -> if (t.intervalSec > 0) now + t.intervalSec * 1000L else 0L
+            t.kind == ScheduleKind.SCHEDULED -> 0L // 一次性：手动执行不重复排
             t.kind == ScheduleKind.CRON -> Cron.next(t.cron, now) ?: 0L
             else -> 0L
         }
