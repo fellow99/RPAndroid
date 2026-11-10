@@ -12,7 +12,9 @@ import android.hardware.display.VirtualDisplay
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import org.fellow99.RPAndroid.core.controller.FrameHub
 import org.fellow99.RPAndroid.core.controller.FrameSource
 import org.fellow99.RPAndroid.core.server.MfaLog
@@ -62,6 +64,15 @@ class ProjectionService : Service() {
         try {
             val mp = manager.getMediaProjection(resultCode, data) ?: return stopSelfQuietly()
             projection = mp
+            // Android 14+ 要求：开始捕获（createVirtualDisplay）前必须先注册 callback 以管理资源生命周期；
+            // 未注册会抛 IllegalStateException（投影无法启动）。旧版本（<=33）无此要求，注册亦无副作用。
+            mp.registerCallback(object : MediaProjection.Callback() {
+                override fun onStop() {
+                    // 系统/资源回收主动停止投影：结束本服务，onDestroy 触发 onStopped -> 回滚 Mode A。
+                    MfaLog.i("Projection", "projection stopped by system; ending service")
+                    stopSelf()
+                }
+            }, Handler(Looper.getMainLooper()))
             val wm = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
             val pt = android.graphics.Point()
             wm.defaultDisplay?.getRealSize(pt)
