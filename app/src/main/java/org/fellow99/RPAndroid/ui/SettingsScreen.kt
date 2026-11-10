@@ -6,6 +6,8 @@ import android.os.Build
 import android.provider.Settings
 import android.view.WindowManager
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +24,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -59,6 +62,41 @@ fun SettingsScreen() {
     var a11yEnabled by remember { mutableStateOf(MfaAccessibilityService.isEnabled()) }
     var info by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf<String?>(null) }
+
+    // 010-display-mode：主屏承载授权启动器（A→B 需经系统 MediaProjection 弹窗，无法静默）。
+    val mainModeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val ctl = org.fellow99.RPAndroid.ManagedRuntime.controller()
+        if (ctl == null) {
+            Toast.makeText(context, "会话不可用，无法进入主屏承载", Toast.LENGTH_LONG).show()
+        } else {
+            val ok = org.fellow99.RPAndroid.proj.MediaProjectionHost.onGranted(context, ctl, result.resultCode, result.data)
+            if (!ok) Toast.makeText(context, "未获授权，保持虚拟屏承载", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // 承载模式切换：true=主屏承载(B)，false=虚拟屏承载(A)。
+    fun toggleHostMode() {
+        val ctl = org.fellow99.RPAndroid.ManagedRuntime.controller()
+            ?: return Toast.makeText(context, "会话不可用", Toast.LENGTH_SHORT).show()
+        if (ctl.displayMode == org.fellow99.RPAndroid.core.controller.DisplayMode.MAIN) {
+            // B → A：经状态机释放投影并回虚拟屏承载（releaseProjection 钩子停止 MediaProjection）。
+            val denied = ctl.switchDisplayMode(org.fellow99.RPAndroid.core.controller.DisplayMode.VIRTUAL)
+            if (denied != null) Toast.makeText(context, denied, Toast.LENGTH_LONG).show()
+        } else {
+            // A → B：需先经系统授权弹窗（无法静默）。
+            val denied = if (ctl.hasRunningTask?.invoke() == true)
+                "自动化任务正在运行，禁止切换" else null
+            if (denied != null) {
+                Toast.makeText(context, denied, Toast.LENGTH_LONG).show()
+            } else {
+                val intent = org.fellow99.RPAndroid.proj.MediaProjectionHost.authorizationIntent(context)
+                if (intent != null) mainModeLauncher.launch(intent)
+                else Toast.makeText(context, "无法发起主屏授权", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         // 分辨率默认：与当前应用（窗口）分辨率一致，使全屏呈现区域无黑边（仅首次未配置时初始化）
@@ -153,6 +191,30 @@ fun SettingsScreen() {
                         Toast.makeText(context, "分辨率已保存，下次连接会话生效", Toast.LENGTH_LONG).show()
                     }
                 }, modifier = Modifier.padding(top = 8.dp)) { Text("保存") }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        SectionTitle("承载模式")
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Row(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("主屏承载", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "开启后将被托管 App 前置到主屏（MediaProjection 捕获 + 无障碍读屏/手势）；" +
+                            "关闭则回虚拟屏承载。切换需先经系统授权弹窗。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = org.fellow99.RPAndroid.ui.PresentationHub.displayMode ==
+                        org.fellow99.RPAndroid.core.controller.DisplayMode.MAIN,
+                    onCheckedChange = { toggleHostMode() },
+                )
             }
         }
 
