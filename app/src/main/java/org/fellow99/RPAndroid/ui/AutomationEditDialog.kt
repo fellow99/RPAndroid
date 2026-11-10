@@ -2,9 +2,12 @@ package org.fellow99.RPAndroid.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,6 +15,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -19,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,65 +73,22 @@ fun AutomationEditDialog(
     var error by remember { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
 
-    // 固定日期时间：年月日时分秒（字符串输入），初始化自现有 runAt。
-    var schY by remember { mutableStateOf("") }
-    var schMo by remember { mutableStateOf("") }
-    var schD by remember { mutableStateOf("") }
-    var schH by remember { mutableStateOf("") }
-    var schMi by remember { mutableStateOf("") }
-    var schS by remember { mutableStateOf("") }
+    // 固定日期时间：epoch 毫秒（0=未设置），用“日期时间选择控件”（日历 + 时分秒下拉）设置。
+    var schAt by remember { mutableStateOf(existing?.runAt ?: 0L) }
+    var pickingDateTime by remember { mutableStateOf(false) }
 
-    fun fillSchedule(runAt: Long) {
-        if (runAt <= 0) {
-            // 新建默认：明天同一时刻
-            val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, 1) }
-            schY = c.get(Calendar.YEAR).toString()
-            schMo = (c.get(Calendar.MONTH) + 1).toString()
-            schD = c.get(Calendar.DAY_OF_MONTH).toString()
-            schH = c.get(Calendar.HOUR_OF_DAY).toString()
-            schMi = c.get(Calendar.MINUTE).toString()
-            schS = "0"
-        } else {
-            val c = Calendar.getInstance().apply { timeInMillis = runAt }
-            schY = c.get(Calendar.YEAR).toString()
-            schMo = (c.get(Calendar.MONTH) + 1).toString()
-            schD = c.get(Calendar.DAY_OF_MONTH).toString()
-            schH = c.get(Calendar.HOUR_OF_DAY).toString()
-            schMi = c.get(Calendar.MINUTE).toString()
-            schS = c.get(Calendar.SECOND).toString()
-        }
-    }
-
-    fun parseSchedule(): Long? {
-        val y = schY.trim().toLongOrNull() ?: return null
-        val mo = schMo.trim().toLongOrNull() ?: return null
-        val day = schD.trim().toLongOrNull() ?: return null
-        val h = schH.trim().toLongOrNull() ?: return null
-        val mi = schMi.trim().toLongOrNull() ?: return null
-        val s = schS.trim().toLongOrNull() ?: return null
-        if (y < 1970 || mo !in 1..12 || day !in 1..31 || h !in 0..23 || mi !in 0..59 || s !in 0..59) return null
-        return try {
-            Calendar.getInstance().apply {
-                set(Calendar.YEAR, y.toInt()); set(Calendar.MONTH, mo.toInt() - 1); set(Calendar.DAY_OF_MONTH, day.toInt())
-                set(Calendar.HOUR_OF_DAY, h.toInt()); set(Calendar.MINUTE, mi.toInt()); set(Calendar.SECOND, s.toInt())
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-        } catch (e: Exception) {
-            null
-        }
-    }
+    /** 新建默认：明天同一时刻。 */
+    fun defaultSchedule(): Long =
+        Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, 1) }.timeInMillis
 
     fun save() {
         when {
             name.isBlank() -> error = "请填写任务名称"
             kind == ScheduleKind.INTERVAL && (intervalSec.toLongOrNull() ?: 0) <= 0 -> error = "间隔执行需填写大于 0 的秒数"
             kind == ScheduleKind.SCHEDULED -> {
-                val at = parseSchedule()
-                when {
-                    at == null -> error = "固定日期时间不合法（年/月/日/时/分/秒须为数字且在范围内）"
-                    at!! <= System.currentTimeMillis() -> error = "固定日期时间需晚于当前时刻"
-                    else -> error = null
-                }
+                if (schAt <= 0) error = "请选择固定日期时间"
+                else if (schAt <= System.currentTimeMillis()) error = "固定日期时间需晚于当前时刻"
+                else error = null
                 if (error != null) return
             }
             kind == ScheduleKind.CRON && Cron.next(cron.trim(), System.currentTimeMillis()) == null ->
@@ -131,7 +96,7 @@ fun AutomationEditDialog(
         }
         if (error != null) return
         val id = existing?.id ?: ("t" + System.currentTimeMillis())
-        val runAt = if (kind == ScheduleKind.SCHEDULED) (parseSchedule() ?: 0) else 0
+        val runAt = if (kind == ScheduleKind.SCHEDULED) schAt else 0
         val task = ScriptTask(
             id = id,
             name = name.trim(),
@@ -188,8 +153,8 @@ fun AutomationEditDialog(
                         FilterChip(
                             selected = kind == k,
                             onClick = {
-                                // 切换到 SCHEDULED 且未初始化时给出默认值
-                                if (k == ScheduleKind.SCHEDULED && schY.isBlank()) fillSchedule(existing?.runAt ?: 0)
+                                // 切换到 SCHEDULED 且未设置时给默认值（明天同一时刻）
+                                if (k == ScheduleKind.SCHEDULED && schAt == 0L) schAt = defaultSchedule()
                                 kind = k
                             },
                             label = { Text(k.label) },
@@ -208,16 +173,18 @@ fun AutomationEditDialog(
                 }
                 if (kind == ScheduleKind.SCHEDULED) {
                     Text("固定日期时间", style = MaterialTheme.typography.bodySmall)
-                    // 年月 / 日 / 时分秒
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(value = schY, onValueChange = { schY = it }, label = { Text("年") }, singleLine = true, modifier = Modifier.width(96.dp))
-                        OutlinedTextField(value = schMo, onValueChange = { schMo = it }, label = { Text("月") }, singleLine = true, modifier = Modifier.width(72.dp))
-                        OutlinedTextField(value = schD, onValueChange = { schD = it }, label = { Text("日") }, singleLine = true, modifier = Modifier.width(72.dp))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(value = schH, onValueChange = { schH = it }, label = { Text("时") }, singleLine = true, modifier = Modifier.width(72.dp))
-                        OutlinedTextField(value = schMi, onValueChange = { schMi = it }, label = { Text("分") }, singleLine = true, modifier = Modifier.width(72.dp))
-                        OutlinedTextField(value = schS, onValueChange = { schS = it }, label = { Text("秒") }, singleLine = true, modifier = Modifier.width(72.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = if (schAt > 0) fmtDateTime(schAt) else "未设置",
+                            onValueChange = {},
+                            label = { Text("日期时间") },
+                            enabled = false,
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedButton(onClick = { pickingDateTime = true }, modifier = Modifier.padding(start = 8.dp)) {
+                            Text("选择")
+                        }
                     }
                 }
                 OutlinedTextField(
@@ -243,6 +210,14 @@ fun AutomationEditDialog(
 
     if (picking) {
         AppPickerDialog(apps = apps, current = pkg, onPick = { pkg = it; picking = false }, onDismiss = { picking = false })
+    }
+
+    if (pickingDateTime) {
+        DateTimePickerDialog(
+            initial = schAt.takeIf { it > 0 } ?: System.currentTimeMillis(),
+            onPick = { schAt = it; pickingDateTime = false },
+            onDismiss = { pickingDateTime = false },
+        )
     }
 }
 
@@ -284,6 +259,83 @@ private fun AppPickerDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
     )
+}
+
+/** 日期时间选择控件：日历选日期 + 时/分/秒下拉（含秒，M3 TimePicker 无秒故用下拉）。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateTimePickerDialog(
+    initial: Long,
+    onPick: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val initCal = remember { Calendar.getInstance().apply { timeInMillis = initial } }
+    val dateState = rememberDatePickerState(initialSelectedDateMillis = initial)
+    var hour by remember { mutableStateOf(initCal.get(Calendar.HOUR_OF_DAY)) }
+    var minute by remember { mutableStateOf(initCal.get(Calendar.MINUTE)) }
+    var second by remember { mutableStateOf(initCal.get(Calendar.SECOND)) }
+
+    fun commit() {
+        val selUtc = dateState.selectedDateMillis ?: run { onPick(initial); return }
+        // DatePicker 返回“所选日期在 UTC 的午夜”；取其年月日与当前时区时分秒组合成目标时刻。
+        val day = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = selUtc }
+        val target = Calendar.getInstance().apply {
+            set(Calendar.YEAR, day.get(Calendar.YEAR))
+            set(Calendar.MONTH, day.get(Calendar.MONTH))
+            set(Calendar.DAY_OF_MONTH, day.get(Calendar.DAY_OF_MONTH))
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, second)
+            set(Calendar.MILLISECOND, 0)
+        }
+        onPick(target.timeInMillis)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择日期时间") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()).width(320.dp)) {
+                DatePicker(state = dateState, showModeToggle = false)
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TimeSpinner(0..23, hour) { hour = it }
+                    Text(" : ", style = MaterialTheme.typography.titleMedium)
+                    TimeSpinner(0..59, minute) { minute = it }
+                    Text(" : ", style = MaterialTheme.typography.titleMedium)
+                    TimeSpinner(0..59, second) { second = it }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { commit() }) { Text("确定") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+/** 时分秒下拉选择器（无文本框输入）。 */
+@Composable
+private fun TimeSpinner(range: IntRange, value: Int, onChange: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { expanded = true }) { Text(String.format("%02d", value)) }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            range.forEach { v ->
+                DropdownMenuItem(
+                    text = { Text(String.format("%02d", v)) },
+                    onClick = { onChange(v); expanded = false },
+                )
+            }
+        }
+    }
+}
+
+private fun fmtDateTime(epochMs: Long): String {
+    val f = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+    return f.format(java.util.Date(epochMs))
 }
 
 private fun listAppsForPicker(controller: org.fellow99.RPAndroid.core.controller.ScreenController?): List<AppInfo> =
