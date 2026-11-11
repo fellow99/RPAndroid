@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">RPAuto</string>
+    <string name="slogan">Root-Free Automation &amp; Testing Tool</string>
+    <string name="a11y_desc">Reads UI controls of the app being managed (local only, never transmitted off-device)</string>
+</resources>

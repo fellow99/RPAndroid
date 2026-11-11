@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "org.fellow99.RPAndroid.core.script"
+    namespace = "top.fellow99.rpandroid.core.script"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

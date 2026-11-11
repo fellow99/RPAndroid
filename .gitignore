@@ -24,9 +24,17 @@ Thumbs.db
 *.keystore
 *.jks
 *.env
+keystore.properties
 
-# pi client/harness local config（含本机会话 token/IP，不入库）
-.pi/
+# Agent/tool directories
+.sisyphus
+.specify
+.opencode
+.claude
+.omo
+.codegraph
+.playwright-mcp
+.pi
 
 tools/vdisplay/out/
 *.class

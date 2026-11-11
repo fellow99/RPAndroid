@@ -3,12 +3,22 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// ── 签名材料不入库（对齐 pi-desktop-android 先例）──────────────────────────
+// keystore.properties（已 gitignore；模板见 keystore.properties.sample）提供
+// storeFile/storePassword/keyAlias/keyPassword；文件缺失 ⇒ release 产生未签名包。
+import java.util.Properties
+
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
 android {
-    namespace = "org.fellow99.RPAndroid"
+    namespace = "top.fellow99.rpandroid"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "org.fellow99.RPAndroid"
+        applicationId = "top.fellow99.rpandroid"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
@@ -20,6 +30,15 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // 签名材料本地持有、不入库；GitHub Actions 经 secrets 注入生成 keystore.properties
+            if (keystoreProps.isNotEmpty()) {
+                signingConfig = signingConfigs.create("release") {
+                    storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                    storePassword = keystoreProps.getProperty("storePassword")
+                    keyAlias = keystoreProps.getProperty("keyAlias")
+                    keyPassword = keystoreProps.getProperty("keyPassword")
+                }
+            }
         }
     }
 
