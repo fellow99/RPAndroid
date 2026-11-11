@@ -41,7 +41,9 @@ data class ScriptTask(
         fun from(o: JSONObject) = ScriptTask(
             id = o.optString("id"),
             name = o.optString("name"),
-            packageName = o.optString("packageName").takeIf { it.isNotEmpty() },
+            // 注意 org.json 的坑：optString 对 JSON null 返回字面量 "null"。客户端/脚本把
+            // packageName 序列化成 null 再 upsert 回来时，会被当成真实包名（UI 显示 “null · 定时 …”）。
+            packageName = o.optString("packageName").takeIf { it.isNotEmpty() && it != "null" },
             script = o.optString("script"),
             enabled = o.optBoolean("enabled", true),
             kind = runCatching { ScheduleKind.valueOf(o.optString("kind", "IMMEDIATE")) }.getOrDefault(ScheduleKind.IMMEDIATE),
@@ -62,26 +64,40 @@ data class ScriptTask(
 }
 
 /**
+ * 手动「立即执行一次」之后的下一次计划时刻（0 = 不再排）。
+ *
+ * 关键：`SCHEDULED`（固定日期时间）的 runAt **仍在未来时必须保留**。历史实现把手动执行后的
+ * nextRunAt 一律清零，但 AlarmManager 里那支闹钟仍在——结果任务既“马上执行一次”，又在到点时
+ * 再执行一次（双跑），而 UI 上又看不到待执行时刻。
+ */
+fun nextRunAfterManualRun(task: ScriptTask, now: Long): Long = when {
+    !task.enabled -> 0L
+    task.kind == ScheduleKind.INTERVAL -> if (task.intervalSec > 0) now + task.intervalSec * 1000L else 0L
+    task.kind == ScheduleKind.SCHEDULED -> if (task.runAt > now) task.runAt else 0L
+    task.kind == ScheduleKind.CRON -> Cron.next(task.cron, now) ?: 0L
+    else -> 0L
+}
+
+/**
  * [TaskStore] —— 任务持久化（单个 JSON 文件，位于 app filesDir，可跨进程读取）。
+ *
+ * 锁是**进程级共享**（companion）：调度器、REST/MCP、UI、watchdog 各自 new 一个实例，
+ * 用实例锁会让「读-改-写」互相覆盖（实测 runCount 恒偏小、lastStatus 偶尔被旧副本抹掉）。
  */
 class TaskStore(private val file: File) {
 
-    @Synchronized
-    fun all(): List<ScriptTask> = read().toList()
+    fun all(): List<ScriptTask> = synchronized(LOCK) { read().toList() }
 
-    @Synchronized
-    fun get(id: String): ScriptTask? = read().firstOrNull { it.id == id }
+    fun get(id: String): ScriptTask? = synchronized(LOCK) { read().firstOrNull { it.id == id } }
 
-    @Synchronized
-    fun upsert(task: ScriptTask) {
+    fun upsert(task: ScriptTask) = synchronized(LOCK) {
         val list = read().toMutableList()
         val i = list.indexOfFirst { it.id == task.id }
         if (i >= 0) list[i] = task else list.add(task)
         write(list)
     }
 
-    @Synchronized
-    fun delete(id: String) {
+    fun delete(id: String) = synchronized(LOCK) {
         write(read().filterNot { it.id == id })
     }
 
@@ -98,5 +114,10 @@ class TaskStore(private val file: File) {
         val arr = JSONArray()
         list.forEach { arr.put(JSONObject(it.toJson())) }
         file.writeText(arr.toString())
+    }
+
+    private companion object {
+        /** 跨实例共享锁：同进程内所有 TaskStore 的读-改-写必须串行。 */
+        val LOCK = Any()
     }
 }

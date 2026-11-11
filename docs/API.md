@@ -87,8 +87,8 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 | GET | `/tasks` | 自动化服务任务列表 |
 | POST | `/tasks` | 创建/更新任务（JSON） |
 | DELETE | `/tasks/{id}` | 删除任务 |
-| POST | `/tasks/{id}/run` | 立即执行任务（互斥：已在执行其它任务时返回 `ok:false`） |
-| POST | `/tasks/{id}/stop` | 停止任务的执行/调度 |
+| POST | `/tasks/{id}/run` | **立即执行一次**（互斥：已在执行其它任务时返回 `ok:false`）。不消耗定时计划：`SCHEDULED` 的 `runAt` 仍在未来时 `nextRunAt` 保持为 `runAt` |
+| POST | `/tasks/{id}/stop` | 停止执行 + 取消已排闹钟 + 停用任务（`enabled=false`，避免下次 `rescheduleAll` 又被排上） |
 
 任务对象字段：`id,name,packageName,script,enabled,kind,intervalSec,runAt`（另含运行统计 `lastRunAt,nextRunAt,runCount,lastStatus`）；
 `kind` 取值 `IMMEDIATE` / `INTERVAL`（间隔**秒**，字段 `intervalSec`）/ `SCHEDULED`（固定日期时间，字段 `runAt`=epoch 毫秒）；
@@ -96,6 +96,8 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 
 - `cron` 支持 5 字段（`分 时 日 月 周`）与 6 字段（`秒 分 时 日 月 周`）；“每分钟第 00 秒”用 `0 * * * * *`。
 - 定时触发会占用全局唯一运行态（与手动 run 互斥）并更新 `runCount/lastRunAt`；完成后 watchdog 回写 `lastStatus`。
+- `POST /tasks`（upsert）只在**新建**任务时执行一次「立即」任务；对已存在任务的保存（改名/改脚本/切开关）不会再触发执行。
+- 想“按时间跑”就不要调 `run`：`SCHEDULED/INTERVAL/CRON` 靠调度器（`nextRunAt` 可观测）执行；`run` 只用于手动试跑一次。
 - 定时任务依赖精确闹钟（`USE_EXACT_ALARM`）；若 ROM 回收该权限，息屏/待机会被延迟。
 - `POST /tasks/{id}/stop` 立即释放运行态并写 `lastStatus=cancelled`（脚本中止为尽力而为）。
 

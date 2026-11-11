@@ -98,13 +98,35 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
         }
     }
 
+    /**
+     * 「启动」＝按已配置的执行方式启用调度（不立即执行）。
+     *
+     * 历史实现只有 `runNow`（立即执行），定时任务点播放图标会当场跑一遍——用户只想“启动定时”时
+     * 就会看到脚本马上执行。现在定时/间隔/cron 任务只能「启动」或（用开关/停止）取消，不再提供
+     * 会绕过时间设置的执行入口。
+     */
+    fun startSchedule(task: ScriptTask) {
+        if (task.kind == ScheduleKind.SCHEDULED && task.runAt <= System.currentTimeMillis()) {
+            message = "定时时间已过，请编辑后再启动"
+            return
+        }
+        scope.launch {
+            val next = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                TaskScheduler(context.applicationContext).arm(task.id)
+            }
+            reload()
+            message = if (next > 0) "已启动：将于 ${nextRunLabel(next)} 执行" else "启动失败：当前计划无效，请编辑"
+        }
+    }
+
     fun stop(task: ScriptTask) {
         scope.launch {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 TaskRuntime.end(task.id)
                 TaskScheduler(context.applicationContext).stop(task.id)
             }
-            message = "已停止：${task.name.ifBlank { task.id }}"
+            reload()
+            message = "已停止并停用：${task.name.ifBlank { task.id }}"
         }
     }
 
@@ -195,6 +217,7 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
             else -> AutomationList(
                 tasks = tasks,
                 onRun = { runNow(it) },
+                onStart = { startSchedule(it) },
                 onStop = { stop(it) },
                 onToggle = { t, e -> toggleEnabled(t, e) },
                 onEdit = { editing = it },
@@ -246,6 +269,7 @@ fun AutomationScreen(onOpenSettings: () -> Unit) {
 private fun AutomationList(
     tasks: List<ScriptTask>?,
     onRun: (ScriptTask) -> Unit,
+    onStart: (ScriptTask) -> Unit,
     onStop: (ScriptTask) -> Unit,
     onToggle: (ScriptTask, Boolean) -> Unit,
     onEdit: (ScriptTask) -> Unit,
@@ -287,6 +311,7 @@ private fun AutomationList(
                         running = runningId == task.id,
                         othersRunning = runningId != null && runningId != task.id,
                         onRun = { onRun(task) },
+                        onStart = { onStart(task) },
                         onStop = { onStop(task) },
                         onToggle = { onToggle(task, it) },
                         onEdit = { onEdit(task) },
@@ -304,6 +329,7 @@ private fun AutomationRow(
     running: Boolean,
     othersRunning: Boolean,
     onRun: () -> Unit,
+    onStart: () -> Unit,
     onStop: () -> Unit,
     onToggle: (Boolean) -> Unit,
     onEdit: () -> Unit,
@@ -311,6 +337,9 @@ private fun AutomationRow(
 ) {
     val context = LocalContext.current
     val label = remember(task.packageName) { appLabelFor(context, task.packageName) }
+    val now = System.currentTimeMillis()
+    // 已启用且已排好时间＝定时/间隔任务正在等时间到（不再提供会“跳过等待”的执行按钮）。
+    val waiting = !running && task.kind != ScheduleKind.IMMEDIATE && task.enabled && task.nextRunAt > now
 
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(
@@ -336,6 +365,13 @@ private fun AutomationRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (waiting) {
+                    Text(
+                        "等待执行：${nextRunLabel(task.nextRunAt)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 if (task.lastStatus.isNotBlank()) {
                     Text(
                         "上次：${task.lastStatus}",
@@ -345,14 +381,20 @@ private fun AutomationRow(
                     )
                 }
             }
-            // 右侧按钮区：无边框 + 图标（执行/停止、编辑、删除）
-            if (task.enabled) {
-                when {
-                    running -> IconTextButton(StopIcon, "停止", onStop)
-                    !othersRunning -> IconTextButton(Icons.Filled.PlayArrow, "执行", onRun)
-                    // 其它任务执行中：占位，避免布局跳动
-                    else -> Spacer(Modifier.width(48.dp))
+            // 右侧按钮区：无边框 + 图标（执行/启动/停止、编辑、删除）
+            when {
+                running -> IconTextButton(StopIcon, "停止", onStop)
+                // 立即任务才提供「执行」（＝当场跑一次）；定时/间隔/cron 只「启动」调度。
+                task.kind == ScheduleKind.IMMEDIATE -> if (task.enabled && !othersRunning) {
+                    IconTextButton(Icons.Filled.PlayArrow, "执行", onRun)
+                } else {
+                    Spacer(Modifier.width(48.dp)) // 停用 or 其它任务执行中：占位，避免布局跳动
                 }
+                // 定时已过点 / 间隔非法：没有可排的计划，只能编辑。
+                task.kind == ScheduleKind.SCHEDULED && task.runAt <= now -> Unit
+                task.kind == ScheduleKind.INTERVAL && task.intervalSec <= 0 -> Unit
+                waiting -> Unit // 已在等待：开关即取消，无需其它按钮
+                else -> IconTextButton(Icons.Filled.PlayArrow, "启动", onStart)
             }
             IconTextButton(Icons.Filled.Edit, "编辑", onEdit)
             IconTextButton(Icons.Filled.Delete, "删除", onDelete)
@@ -403,8 +445,15 @@ private fun appLabelFor(context: android.content.Context, pkg: String?): String?
 private fun scheduleLabel(t: ScriptTask): String = when (t.kind) {
     ScheduleKind.IMMEDIATE -> "立即执行"
     ScheduleKind.INTERVAL -> "间隔 ${t.intervalSec} 秒"
-    ScheduleKind.SCHEDULED -> "定时 " + scheduleAtLabel(t.runAt)
+    ScheduleKind.SCHEDULED -> "定时 " + scheduleAtLabel(t.runAt) +
+        if (t.runAt > 0 && t.runAt <= System.currentTimeMillis() && t.nextRunAt <= 0) "（已到点）" else ""
     ScheduleKind.CRON -> "cron: ${t.cron}"
+}
+
+/** 下次执行时刻（含秒）：定时任务的关键信息，不能只剩一个日期。 */
+private fun nextRunLabel(nextRunAt: Long): String {
+    val fmt = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.getDefault())
+    return fmt.format(java.util.Date(nextRunAt))
 }
 
 private fun scheduleAtLabel(runAt: Long): String = if (runAt <= 0) "未设置" else {

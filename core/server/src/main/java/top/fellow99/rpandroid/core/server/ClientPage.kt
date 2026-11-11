@@ -647,7 +647,8 @@ object ClientPage {
   }
   function scheduleLabel(t) {
     if (t.kind === "INTERVAL") return "间隔 " + (t.intervalSec || 0) + " 秒";
-    if (t.kind === "SCHEDULED") return "定时 " + fmtLocal(t.runAt);
+    if (t.kind === "SCHEDULED") return "定时 " + fmtLocal(t.runAt).replace("T", " ") +
+      ((t.runAt || 0) <= Date.now() && (t.nextRunAt || 0) <= 0 ? "（已到点）" : "");
     if (t.kind === "CRON") return "cron: " + t.cron;
     return "立即执行";
   }
@@ -660,6 +661,10 @@ object ClientPage {
     acol.appendChild(el("div", "aname", t.name || t.id));
     var label = t.packageName ? (appsMap[t.packageName] || t.packageName) : "未指定 App";
     acol.appendChild(el("div", "asub", label + " · " + scheduleLabel(t)));
+    // 定时/间隔/cron：已排上就明确告知“什么时候执行”，避免用户误以为没生效而手动点执行。
+    if (t.kind !== "IMMEDIATE" && scheduleArmed(t)) {
+      acol.appendChild(el("div", "asub", "等待执行：" + fmtLocal(t.nextRunAt).replace("T", " ")));
+    }
     if (t.lastStatus && t.lastStatus.length > 0) {
       var last = el("div", "alast" + (t.lastStatus.indexOf("error") === 0 ? " err" : ""), "上次：" + t.lastStatus);
       acol.appendChild(last);
@@ -670,10 +675,15 @@ object ClientPage {
     var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!t.enabled;
     sw.appendChild(cb); sw.appendChild(document.createElement("span"));
     cb.addEventListener("change", function () { toggleTask(t, cb.checked); });
-    if (t.enabled) {
-      var running = effectiveRunning();
-      if (running === t.id) { actr.appendChild(mkBtn(IC.stop, "停止", function () { stopTask(t); })); }
-      else if (!running) { actr.appendChild(mkBtn(IC.play, "执行", function () { runTask(t); })); }
+    var running = effectiveRunning();
+    // 按钮语义（与 App UI 一致）：
+    //   运行中 → 停止；立即任务 → 执行（当场跑一次）；定时/间隔/cron → 只「启动」调度，不跳过等待。
+    if (running === t.id) {
+      actr.appendChild(mkBtn(IC.stop, "停止", function () { stopTask(t); }));
+    } else if (t.kind === "IMMEDIATE") {
+      if (t.enabled && !running) actr.appendChild(mkBtn(IC.play, "执行", function () { runTask(t); }));
+    } else if (!planExpired(t) && !(t.kind === "INTERVAL" && (t.intervalSec || 0) <= 0) && !scheduleArmed(t)) {
+      actr.appendChild(mkBtn(IC.play, "启动", function () { startTask(t); }));
     }
     actr.appendChild(mkBtn(IC.edit, "编辑", function () { openEdit(t); }));
     var delBtn = mkBtn(IC.del, "删除", function () { deleteTask(t); });
@@ -684,6 +694,10 @@ object ClientPage {
     d.appendChild(img); d.appendChild(acol); d.appendChild(actr);
     return d;
   }
+  /** 该任务是否已排上下一次（定时/间隔/cron 的“启动”状态）。 */
+  function scheduleArmed(t) { return !!t.enabled && (t.nextRunAt || 0) > Date.now(); }
+  /** 固定日期时间已过：无可排计划，只能编辑。 */
+  function planExpired(t) { return t.kind === "SCHEDULED" && (t.runAt || 0) <= Date.now(); }
   function mkBtn(icon, label, fn) {
     var b = el("button", "btn sm", "");
     b.innerHTML = (icon || "") + (label ? "<span>" + label + "</span>" : "");
@@ -713,10 +727,23 @@ object ClientPage {
       .then(function (res) {
         if (res && res.ok) {
           runningLocal = null; runningServer = null; lastServerRunning = null;
-          showToast("已停止：" + (t.name || t.id));
+          t.enabled = false; // 停止同时停用，避免下次重排又到点触发
+          showToast("已停止并停用：" + (t.name || t.id));
           renderAuto();
         } else showToast("停止失败");
       }).catch(function (e) { showToast("停止失败：" + e.message); });
+  }
+  /** 启动调度（启用 + 排好下一次），不立即执行。 */
+  function startTask(t) {
+    if (planExpired(t)) { showToast("定时时间已过，请编辑后再启动"); return; }
+    saveTaskEnabled(t, true).then(function (ok) {
+      if (!ok) { showToast("启动失败"); return; }
+      t.enabled = true;
+      showToast(t.kind === "SCHEDULED"
+        ? "已启动：将于 " + fmtLocal(t.runAt).replace("T", " ") + " 执行"
+        : "已启动调度");
+      refreshAuto(); renderAuto();
+    });
   }
   function deleteTask(t) {
     if (!confirm("确定删除「" + (t.name || t.id) + "」吗？该操作会取消其已排闹钟且不可恢复。")) return;
@@ -731,11 +758,18 @@ object ClientPage {
       }).catch(function (e) { showToast("删除失败：" + e.message); });
   }
   function toggleTask(t, enabled) {
+    saveTaskEnabled(t, enabled).then(function (ok) {
+      if (ok) { t.enabled = enabled; showToast(enabled ? "已启用" : "已停用"); renderAuto(); }
+      else showToast("保存失败");
+    });
+  }
+  /** 只改启用态（走 upsert；服务端仅在“新建”任务时执行立即任务，更新不会触发执行）。 */
+  function saveTaskEnabled(t, enabled) {
     var body = { id: t.id, name: t.name, packageName: t.packageName || null, script: t.script, enabled: enabled, kind: t.kind, intervalSec: t.intervalSec || 0, runAt: t.runAt || 0, cron: t.cron || "" };
-    api("/tasks", { method: "POST", body: JSON.stringify(body) })
+    return api("/tasks", { method: "POST", body: JSON.stringify(body) })
       .then(function (r) { return r.json(); })
-      .then(function (res) { if (res && res.ok) { t.enabled = enabled; showToast(enabled ? "已启用" : "已停用"); renderAuto(); } else showToast("保存失败"); })
-      .catch(function () { showToast("保存失败"); });
+      .then(function (res) { return !!(res && res.ok); })
+      .catch(function () { return false; });
   }
   function fmtLocal(runAt) {
     if (!runAt) return "";
@@ -785,7 +819,7 @@ object ClientPage {
     qf("f_kind").value = t ? t.kind : "IMMEDIATE";
     qf("f_interval").value = t ? (t.intervalSec || "") : "";
     qf("f_runat").value = t ? fmtLocal(t.runAt) : "";
-    qf("f_script").value = t ? t.script : "// await host.invoke('screen.tap', { x: 360, y: 500 })";
+    qf("f_script").value = t ? t.script : "// 示例：点击虚拟屏坐标（需托管会话）\nawait host.invoke('screen.tap', { x: 360, y: 500 });";
     qf("editErr").textContent = "";
     closeAppPicker();
     syncKindFields();

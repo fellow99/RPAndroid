@@ -101,8 +101,8 @@ curl -X POST http://localhost:8099/mcp \
 | `task_create` | 创建/更新任务（全量 upsert，id 可省略自动生成） | `task*`：`id,name,script,enabled,kind,intervalSec,runAt` |
 | `task_modify` | 按 id **部分修改**已存在任务，保留运行统计；不存在返回错误 | `id*`，`patch*`（任意可编辑字段：`name,script,enabled,kind,intervalSec,runAt,packageName`） |
 | `task_delete` | 按 id 删除任务 | `id*` |
-| `task_run` | 立即执行任务；`waitMs>0` 时等待结束并返回任务状态 | `id*`，可选 `waitMs` |
-| `task_stop` | 停止执行 + 取消已排闹钟（尽力而为） | `id*` |
+| `task_run` | 立即执行一次（不消耗定时计划：`SCHEDULED` 仍在未来时 `nextRunAt` 保持不变）；`waitMs>0` 时等待结束并返回任务状态 | `id*`，可选 `waitMs` |
+| `task_stop` | 停止执行 + 取消已排闹钟 + 停用任务（尽力而为） | `id*` |
 | `task_docs` | 返回 JS 脚本文档：全部 `host.invoke` 接口签名、坐标口径与示例 | 无 |
 
 ### 观察与诊断

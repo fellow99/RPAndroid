@@ -69,7 +69,14 @@ fun AutomationEditDialog(
     var kind by remember { mutableStateOf(existing?.kind ?: ScheduleKind.IMMEDIATE) }
     var intervalSec by remember { mutableStateOf((existing?.intervalSec ?: 0L).toString()) }
     var cron by remember { mutableStateOf(existing?.cron ?: "") }
-    var script by remember { mutableStateOf(existing?.script ?: "// await host.invoke('screen.tap', {x:360,y:500})") }
+    // 默认脚本必须是**可执行**的合法 JS：之前默认只有一行注释，runner 包成
+    // `(async()=>{ ... })()` 后直接 SyntaxError: Unexpected end of input（真机实测）。
+    var script by remember {
+        mutableStateOf(
+            existing?.script
+                ?: "// 示例：点击虚拟屏坐标（需托管会话）\nawait host.invoke('screen.tap', { x: 360, y: 500 });",
+        )
+    }
     var error by remember { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
 

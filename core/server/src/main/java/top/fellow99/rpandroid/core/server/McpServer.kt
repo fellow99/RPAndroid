@@ -159,13 +159,13 @@ class McpServer(
                 JSONObject().put("id", prop("string", "task id")), listOf("id"),
             )
             tool(
-                "task_run", "Run an automation-service task now. Optional waitMs waits for completion and returns lastStatus/runCount",
+                "task_run", "Run an automation-service task now (one-off manual run; it does NOT consume a pending scheduled run). Optional waitMs waits for completion and returns lastStatus/runCount",
                 JSONObject().put("id", prop("string", "task id"))
                     .put("waitMs", prop("integer", "wait for completion up to N ms (default 0 = return immediately)")),
                 listOf("id"),
             )
             tool(
-                "task_stop", "Stop an automation-service task: cancel its scheduled alarm and signal the running script to abort",
+                "task_stop", "Stop an automation-service task: cancel its scheduled alarm, disable it, and signal the running script to abort",
                 JSONObject().put("id", prop("string", "task id")), listOf("id"),
             )
             tool(

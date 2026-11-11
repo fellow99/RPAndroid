@@ -7,8 +7,10 @@
 - [PASS] TC1-1 `GET /health` 返回 `{ok:true,service,authEnabled}`；设置 token 后 `authEnabled=true`。
 - [PASS] TC1-2 `GET /apps/{pkg}/icon?token=` 返回 200 image/png（真实 PNG 魔数）；未知 pkg 404；无 token 401。
 - [PASS] TC1-3 `POST /action/key {"code":4}` 无会话返回 `{ok:false}` 不崩溃；有会话注入生效（可与 /frame 前后 diff）。
-- [PASS] TC1-4 `POST /tasks/{id}/stop` 停止后不再运行（nextRun 消除/执行中断），返回 `{ok:true}`。
+- [PASS] TC1-4 `POST /tasks/{id}/stop` 停止后不再运行（nextRun 消除/执行中断，且 `enabled=false` 防止重排后到点再跑），返回 `{ok:true}`。
 - [PASS] TC1-5 `POST /tasks/{id}/run` 互斥：运行 A 时 run B 返回 `ok:false`（服务端 TaskRuntime）。
+- [PASS] TC1-5b 回归：定时任务（`runAt` 未来）`run` 一次后 `nextRunAt` 仍为 `runAt`（不再被清零，也不与闹钟双跑）；到点仍只执行一次。
+- [PASS] TC1-5c 回归：`POST /tasks` 更新已存在任务（改名/改脚本/切启用）不再重复执行；只有**新建**的 `IMMEDIATE` 任务执行一次（并记录 `runCount/lastStatus`）。
 - [PASS] TC1-6 `GET /status` 含 `runningTaskId`（空为 null）；执行时=A，完成后回 null 且 `/tasks` 内 `lastStatus=ok|error:` 回写。
 - [PASS] TC1-7 回归：`/frame`、`/stream`(MJPEG)、`/action/tap`、`/action/swipe`、`/apps`、`/tasks` CRUD、MCP `screen_capture/task_list` 行为不变。
 

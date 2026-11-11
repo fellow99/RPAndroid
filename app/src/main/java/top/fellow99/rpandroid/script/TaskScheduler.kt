@@ -10,6 +10,7 @@ import top.fellow99.rpandroid.core.script.Cron
 import top.fellow99.rpandroid.core.script.ScheduleKind
 import top.fellow99.rpandroid.core.script.ScriptTask
 import top.fellow99.rpandroid.core.script.TaskStore
+import top.fellow99.rpandroid.core.script.nextRunAfterManualRun
 import java.io.File
 
 /**
@@ -37,19 +38,26 @@ class TaskScheduler(private val ctx: Context) {
     }
 
     fun runNow(taskId: String) {
-        ScriptService.clearStopFlag(ctx, taskId)
-        ScriptService.runTask(ctx, taskId)
+        // 先落统计再启动：脚本可能瞬间结束，watchdog 回写 lastStatus 后不能被这里的旧副本覆盖。
         val t = store.get(taskId) ?: return
         val now = System.currentTimeMillis()
-        val next = when {
-            !t.enabled -> 0L // 停用任务手动执行一次，不排后续闹钟
-            t.kind == ScheduleKind.INTERVAL -> if (t.intervalSec > 0) now + t.intervalSec * 1000L else 0L
-            t.kind == ScheduleKind.SCHEDULED -> 0L // 一次性：手动执行不重复排
-            t.kind == ScheduleKind.CRON -> Cron.next(t.cron, now) ?: 0L
-            else -> 0L
-        }
+        val next = nextRunAfterManualRun(t, now)
         store.upsert(t.copy(lastRunAt = now, runCount = t.runCount + 1, nextRunAt = next))
+        ScriptService.clearStopFlag(ctx, taskId)
+        ScriptService.runTask(ctx, taskId)
+        // next>0：保留/续排计划（SCHEDULED 的固定时间仍在未来时必须保留，否则会双跑）。
         if (next > 0) scheduleAt(store.get(taskId) ?: t, next)
+    }
+
+    /**
+     * 启动/重新启用调度（用户视角的「启动」）：启用该任务并按执行方式排好闹钟，**不立即执行**。
+     * @return 实际的下次执行时刻（0 = 未排上，例如固定时间已过或间隔非法）
+     */
+    fun arm(taskId: String): Long {
+        val t = store.get(taskId) ?: return 0
+        if (!t.enabled || t.nextRunAt <= 0) store.upsert(t.copy(enabled = true, nextRunAt = 0))
+        rescheduleAll()
+        return store.get(taskId)?.nextRunAt ?: 0
     }
 
     /**
@@ -80,10 +88,16 @@ class TaskScheduler(private val ctx: Context) {
         rescheduleAll()
     }
 
-    /** 停止某任务：取消已排闹钟 + 写停止信号中止 :node 当前执行（尽力而为）。 */
+    /**
+     * 停止某任务：取消已排闹钟 + 写停止信号中止 :node 当前执行（尽力而为）+ 停用该任务。
+     *
+     * 必须同时置 `enabled=false`：否则下一次 [rescheduleAll]（App 启动、保存任一任务、开机恢复）
+     * 会把这个仍处于启用态的任务重新排上，出现“停止后到点又执行”。
+     */
     fun stop(taskId: String) {
         cancel(taskId)
         ScriptService.requestStop(ctx, taskId)
+        store.get(taskId)?.let { if (it.enabled) store.upsert(it.copy(enabled = false, nextRunAt = 0)) }
     }
 
     private fun scheduleAt(task: ScriptTask, atMs: Long) {

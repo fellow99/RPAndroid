@@ -26,11 +26,16 @@ class TaskApiImpl(private val ctx: Context) : TaskApi {
             o.put("id", "t" + System.currentTimeMillis())
         }
         val t = ScriptTask.from(o)
+        // 是否为新建：只有新建的「立即」任务才执行一次。
+        // 历史实现每次 POST（改名字/改脚本/切启用开关）都重跑一下，是典型的“保存一下就自己动了”。
+        val isNew = store.get(t.id) == null
         store.upsert(t)
         scheduler.rescheduleAll()
-        if (t.kind == top.fellow99.rpandroid.core.script.ScheduleKind.IMMEDIATE && t.enabled) {
-            // 立即任务：创建后即执行一次
-            ScriptService.runTask(ctx, t.id)
+        if (isNew && t.kind == top.fellow99.rpandroid.core.script.ScheduleKind.IMMEDIATE && t.enabled) {
+            // 立即任务：创建后即执行一次（走统一执行入口：互斥 + 统计 + watchdog 回写）。
+            if (TaskRuntime.begin(t.id)) {
+                runCatching { scheduler.runNow(t.id) }.onFailure { TaskRuntime.end(t.id) }
+            }
         }
         true
     }.getOrDefault(false)
