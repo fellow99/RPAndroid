@@ -127,3 +127,26 @@ docs/{API,MCP,Client}.md              (修改)  Mode B 契约文档（不含敏�
 6. `status.mode` + `POST /mode` + MCP `switch_mode` + 通知模式文案 + UI「主屏」按钮/`FLAG_SECURE`
 7. 文档（API/MCP/Client 增 Mode B）
 8. 真机联调 → 依据实测推导缺失工具 → 补充规划与实现
+
+## 6. 实现说明（实现后补充，2026-11-11）
+
+实现/联调后对方案的实际落地补充，与交付代码一致：
+
+### 6.1 Android 14+ 必须 registerCallback（SDK34+ 真机验证）
+- **事实**：`MediaProjection.createVirtualDisplay` 开始捕获前必须先调用 `mediaProjection.registerCallback(callback, handler)`；
+  未注册时 Android 14+ 抛 `IllegalStateException: Must register a callback before starting capture...`，投影起不来、授权后 Mode B 不激活。
+- **版本差异**：Android 13（SDK 33）无此要求（此前旧机型联调正常）；Android 14+（当前真机 SDK 36）必须。
+- **落地**：`ProjectionService.startProjection` 在 `createVirtualDisplay` 之前注册 callback；`onStop()` 中 `stopSelf()`，
+  经 `onDestroy → onStopped` 触发回滚 Mode A。该调用兼容旧版无副作用。
+
+### 6.2 模式切换 UI 迁移到设置页
+- 原先应用页呈现区右上角「主屏承载」按钮（chip）已**移除**。
+- 改为**设置页「无障碍」上方新增「承载模式」Switch**：开=主屏承载(B，触发系统授权弹窗)、关=虚拟屏承载(A)。
+  Switch 状态绑定 `PresentationHub.displayMode`，B↔A 双向切换逻辑与 REST/MCP 共用同一 `switchDisplayMode`。
+- 触发 A→B 必须先经系统 MediaProjection 授权（无法静默）；被拒回 A，Switch 保持仅反映真实模式。
+
+### 6.3 其它实现内聚（对方案的落地修正）
+- 模式状态机与 `ModeController` 独立类的方案并入 `AppScreenController`（`displayMode/projectionAuth/projectionFrameSource`），
+  遵守 C-3（controller 不依赖 server 的 ServerConfig），持久化经 app 层 `persistDisplayMode` 注入回调。
+- 投影失效自动回滚已实现：`ProjectionService.onStopped` → `MediaProjectionHost` → `switchDisplayMode(A)`（补 FR-010-004）。
+- `/status` 增设 `projectionActive`、`frameWidth/frameHeight`（Mode B 用主屏/投影分辨率），供客户端按模式取坐标口径。
