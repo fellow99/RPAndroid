@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -219,6 +221,37 @@ private fun HostedContent(app: AppInfo) {
     val context = LocalContext.current
     val controller = ManagedBridge.controller()
 
+    // 010-display-mode §8.1：呈现区右上角「主屏」按钮，经系统授权弹窗切 Mode B（无法静默）。
+    val mainModeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val ctl = controller as? top.fellow99.rpandroid.core.controller.AppScreenController
+        if (ctl == null) {
+            Toast.makeText(context, "会话不可用，无法进入主屏承载", Toast.LENGTH_LONG).show()
+        } else {
+            val ok = top.fellow99.rpandroid.proj.MediaProjectionHost.onGranted(context, ctl, result.resultCode, result.data)
+            if (!ok) Toast.makeText(context, "未获授权，保持虚拟屏承载", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun toggleHostMode() {
+        val ctl = controller as? top.fellow99.rpandroid.core.controller.AppScreenController ?: return
+        if (ctl.displayMode == top.fellow99.rpandroid.core.controller.DisplayMode.MAIN) {
+            // B → A：经状态机释放投影并回虚拟屏承载（releaseProjection 钩子停止 MediaProjection）。
+            val denied = ctl.switchDisplayMode(top.fellow99.rpandroid.core.controller.DisplayMode.VIRTUAL)
+            if (denied != null) Toast.makeText(context, denied, Toast.LENGTH_LONG).show()
+        } else {
+            // A → B：需先经系统授权弹窗（无法静默）。
+            if (ctl.hasRunningTask?.invoke() == true) {
+                Toast.makeText(context, "自动化任务正在运行，禁止切换", Toast.LENGTH_LONG).show()
+            } else {
+                val intent = top.fellow99.rpandroid.proj.MediaProjectionHost.authorizationIntent(context)
+                if (intent != null) mainModeLauncher.launch(intent)
+                else Toast.makeText(context, "无法发起主屏授权", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     fun setMode(mode: PresentationMode) {
         when (mode) {
             PresentationMode.EMBEDDED -> {
@@ -256,8 +289,7 @@ private fun HostedContent(app: AppInfo) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        // 顶栏：当前 App + 呈现模式切换（嵌入/全屏/浮窗） + 关闭。
-        // （承载模式切换「主屏/虚拟屏」已移至 设置 页，见 SettingsScreen §承载模式。）
+        // 顶栏：当前 App + 呈现模式切换（嵌入/全屏/浮窗） + 承载模式「主屏」按钮（独立样式，§8.1） + 关闭。
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -273,6 +305,10 @@ private fun HostedContent(app: AppInfo) {
             ModeChip("嵌入", PresentationHub.presentationMode == PresentationMode.EMBEDDED) { setMode(PresentationMode.EMBEDDED) }
             ModeChip("全屏", PresentationHub.presentationMode == PresentationMode.FULLSCREEN) { setMode(PresentationMode.FULLSCREEN) }
             ModeChip("浮窗", PresentationHub.presentationMode == PresentationMode.FLOATING) { setMode(PresentationMode.FLOATING) }
+            // 承载模式（A 虚拟屏 / B 主屏）：独立于呈现模式，用实心按钮与 chip 区分（避免混淆，§8.1 备注）。
+            OutlinedButton(onClick = { toggleHostMode() }) {
+                Text(if (PresentationHub.displayMode == top.fellow99.rpandroid.core.controller.DisplayMode.MAIN) "虚拟屏" else "主屏")
+            }
             OutlinedButton(onClick = { close() }) { Text("关闭") }
         }
         // 呈现区域

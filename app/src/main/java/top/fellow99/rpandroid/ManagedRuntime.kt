@@ -49,10 +49,15 @@ object ManagedRuntime {
             controller.persistDisplayMode = { m -> cfg.displayMode = m.wire }
             controller.hasRunningTask = { top.fellow99.rpandroid.script.TaskRuntime.runningTaskId != null }
             controller.mainOps = top.fellow99.rpandroid.ModeBOps(app, shell)
+            // 跨屏迁移协调器：Mode B 本应用→虚拟屏、承载应用→主屏；Mode A 反向（§8.2 本应用搬屏）。
+            val migrator = top.fellow99.rpandroid.proj.DisplayMigrator(app, shell)
             // 离开 Mode B（切回虚拟屏承载）时释放 MediaProjection，避免后台仍捕获主屏。
             controller.releaseProjection = {
                 top.fellow99.rpandroid.proj.MediaProjectionHost.releaseProjection(app, controller)
             }
+            // 进入/离开 Mode B 的跨屏搬屏（在投影帧源挂载后执行）。
+            controller.onEnterMainMode = { migrator.enterMain(controller) }
+            controller.onEnterVirtualMode = { migrator.enterVirtual(controller) }
             // 承载状态同步：REST(/client) 的 /session/launch 经 controller.launch 成功后回调，
             // 把变化发布到 App UI（应用栏自动切换呈现 / 回到网格）。与 App UI 自身发起共用同一入口。
             controller.onHostChanged = {

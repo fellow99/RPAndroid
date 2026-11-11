@@ -45,13 +45,14 @@ object MediaProjectionHost {
             }
         }
         ProjectionService.onReady = { source: FrameSource ->
-            // 先过守卫（FR-010-005）：若被拒（运行任务中），释放投影回滚，不挂帧源，避免状态不一致。
+            // 先挂帧源，再切模式：switchDisplayMode(MAIN) 会触发跨屏迁移（本应用→虚拟屏、承载→主屏）。
+            controller.projectionFrameSource = source
+            // 守卫（FR-010-005）：若被拒（运行任务中），释放投影回滚，不挂模式。
             val denied = controller.switchDisplayMode(top.fellow99.rpandroid.core.controller.DisplayMode.MAIN)
             if (denied != null) {
                 MfaLog.w("Projection", "switch to MAIN denied: $denied; reverting projection")
                 releaseProjection(context, controller)
             } else {
-                controller.projectionFrameSource = source
                 MfaLog.i("Projection", "Mode B ready; projection frame source attached")
             }
             ProjectionService.onReady = null

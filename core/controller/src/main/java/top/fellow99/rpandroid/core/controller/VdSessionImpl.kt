@@ -47,10 +47,15 @@ class VdSessionImpl(
 
     @Volatile private var started = false
 
+    /** 私有虚拟屏 displayId（助手 ready.txt 回写）；未就绪为 null。 */
+    @Volatile private var vdDisplayId: Int? = null
+
     /** App 进程侧帧源；非 null 表示 Surface 交接成功（帧直达 App）。 */
     @Volatile private var hub: FrameHub? = null
 
     override fun frameSource(): FrameSource? = hub
+
+    override fun virtualDisplayId(): Int? = vdDisplayId
 
     /** 连 adbd 并拉起助手，交接 Surface 建虚拟屏，等到 ready.txt（返回 displayId）成功为止。 */
     fun start(): Boolean = runBlocking {
@@ -69,7 +74,8 @@ class VdSessionImpl(
         if (waitReady()) {
             // 助手据 surface_status.txt 决定是否用上了 App 的 Surface
             val status = surfaceStatus()
-            android.util.Log.d("VdSession", "start: ready, surface_status=$status")
+            vdDisplayId = runCatching { readyFile.readText().trim().toIntOrNull() }.getOrNull()
+            android.util.Log.d("VdSession", "start: ready, surface_status=$status displayId=$vdDisplayId")
             started = true
             hub = if (status == "ok") {
                 waitFirstFrame()
@@ -191,6 +197,7 @@ class VdSessionImpl(
     /** 释放帧源等本会话持有的资源（新会话接管前调用，避免线程/读取器泄漏）。 */
     fun release() {
         started = false
+        vdDisplayId = null
         val h = hub
         hub = null
         h?.release()

@@ -50,6 +50,12 @@ class AppScreenController(private val context: Context) : ScreenController {
     /** 离开主屏承载（Mode B）时的投影释放钩子（app 层注入，停止 ProjectionService/清帧源）。 */
     @Volatile var releaseProjection: (() -> Unit)? = null
 
+    /** 进入主屏承载（Mode B）后的跨屏迁移钩子：本应用→虚拟屏、承载应用→主屏。 */
+    @Volatile var onEnterMainMode: (() -> Unit)? = null
+
+    /** 进入虚拟屏承载（Mode A）后的跨屏迁移钩子：承载应用→虚拟屏、本应用→主屏。 */
+    @Volatile var onEnterVirtualMode: (() -> Unit)? = null
+
     /**
      * 切换承载模式：先做守卫（运行自动化任务时禁止切换，FR-010-005），再更新模式并持久化/通知。
      * 离开 MAIN 时经 [releaseProjection] 释放 MediaProjection（避免 B→A 后仍后台捕获主屏）。
@@ -65,6 +71,11 @@ class AppScreenController(private val context: Context) : ScreenController {
         persistDisplayMode?.invoke(target)
         if (old == DisplayMode.MAIN && target != DisplayMode.MAIN) {
             releaseProjection?.invoke()
+        }
+        // 跨屏搬屏（§8.2）：进入主屏承载 / 回虚拟屏承载。在状态更新后触发，避免模式未生效。
+        when (target) {
+            DisplayMode.MAIN -> onEnterMainMode?.invoke()
+            DisplayMode.VIRTUAL -> onEnterVirtualMode?.invoke()
         }
         onDisplayModeChanged?.invoke(target)
         return null
@@ -265,6 +276,8 @@ interface MainScreenOps {
  * 由免 root 自举（M1-2）或开发期部署填充实现。
  */
 interface VdSession {
+    /** 本会话私有虚拟屏的 displayId（VdHelper ready.txt 回写）；未就绪返回 null。 */
+    fun virtualDisplayId(): Int?
     fun launch(packageName: String, component: String?): LaunchResult
     fun captureFrame(): ByteArray?
     fun tap(x: Int, y: Int): Boolean
