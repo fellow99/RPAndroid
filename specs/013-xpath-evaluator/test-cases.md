@@ -80,9 +80,9 @@ Root1
 ## TC-013-101：对真实 App 定位（012 TC-012-003）
 - **Steps**: 承载计算器/设置等 → `ui_query` `//android.widget.TextView[@text="<实际文本>"]`
 - **Expected**: 命中含 bounds 节点，中心点可 `screen_tap` 触发
-- **Status**: 
+- **Status**: **PASS（真机 2026-11-13：ui_query //*[@text=5] 与 //android.widget.TextView[@text=5] 命中含 bounds，center tap 生效）**
 
-## TC-013-102：非法 XPath 经 ui_query 报错（012 TC-012-004）
+## T- **Status**: **PARTIAL（真机：非法 XPath 返回 error 不崩溃；其余边界由离线 JVM 单测覆盖）**
 - **Steps**: `ui_query` 传非法语法
 - **Expected**: 返回明确错误（不崩溃）
 - **Status**: 

@@ -46,11 +46,11 @@
 
 > 依据用户指示：选应用并切到「主屏」承载模式测试；可用 MCP 添加/执行自动化任务。结果在本节追记。
 
-- [ ] **T101** 真机：Mode B 承载目标 App，`ui_dump` 返回层级树（含 resourceId、children）。
-- [ ] **T102** 真机：`ui_read` 返回扁平数组（兼容）。
-- [ ] **T103** 真机：`ui_query` 按 XPath 定位控件（正例），返回含 bounds 命中节点。
-- [ ] **T104** 真机：`ui_get` 按 resourceId 定位。
-- [ ] **T105** 真机：自动化任务脚本 `ui.query → bounds 中心点 → screen.tap` 闭环。
+- [x] **T101** 真机：Mode B 承载目标 App，`ui_dump` 返回层级树（含 resourceId、children）。
+- [x] **T102** 真机：`ui_read` 返回扁平数组（兼容）。
+- [x] **T103** 真机：`ui_query` 按 XPath 定位控件（正例），返回含 bounds 命中节点。
+- [ ] **T104** 真机：`ui_get` 按 resourceId 定位。（PARTIAL：良好/缺参正确；本机 MIUI 界面无 resourceId 无法正向实测，需在含 id 的 App 补验）
+- [x] **T105** 真机：自动化任务脚本 `ui.query → bounds 中心点 → screen.tap` 闭环。
 
 ## Done 标准
 
