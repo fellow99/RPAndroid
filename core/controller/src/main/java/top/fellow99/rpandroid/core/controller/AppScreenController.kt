@@ -25,6 +25,15 @@ class AppScreenController(private val context: Context) : ScreenController {
     /** 界面读取器（由 app 注入无障碍服务实现）。 */
     @Volatile var uiReader: (() -> String?)? = null
 
+    /** 层级树读取器（dumpUi）。 */
+    @Volatile var uiDumper: (() -> String?)? = null
+
+    /** XPath 查询器（queryUi），可抛 [IllegalArgumentException]。 */
+    @Volatile var uiQuerier: ((String) -> String?)? = null
+
+    /** resourceId 定位器（getUi）。 */
+    @Volatile var uiGetter: ((String) -> String?)? = null
+
     // ===== 010-display-mode：承载模式（A 虚拟屏 / B 主屏）=====
     /** 当前承载模式；首启默认虚拟屏承载（A）。 */
     @Volatile var displayMode: DisplayMode = DisplayMode.VIRTUAL
@@ -239,6 +248,12 @@ class AppScreenController(private val context: Context) : ScreenController {
     }
 
     override fun readUi(): String? = runCatching { uiReader?.invoke() }.getOrNull()
+
+    override fun dumpUi(): String? = runCatching { uiDumper?.invoke() }.getOrNull()
+
+    override fun queryUi(xpath: String): String? = uiQuerier?.invoke(xpath)
+
+    override fun getUi(resourceId: String): String? = runCatching { uiGetter?.invoke(resourceId) }.getOrNull()
 
     override fun frameSource(): FrameSource? = when (displayMode) {
         DisplayMode.MAIN -> projectionFrameSource

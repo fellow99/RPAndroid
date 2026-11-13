@@ -65,15 +65,19 @@ curl -X POST http://localhost:8099/mcp \
 
 标准错误码：JSON 解析失败 `-32700`；未知方法 `-32601`；HTTP 鉴权失败 `401`。
 
-## 4. 工具清单（20 个）
+## 4. 工具清单（23 个）
 
 以 `tools/list` 实时返回为准。屏幕类工具需要先建立托管会话（见 §5）。
+XPath 支持范围见 `docs/TASK.md` 与 `specs/013-xpath-evaluator`。
 
 ### 屏幕与交互
 | 工具 | 说明 | 参数（`*` 为必填） |
 |------|------|--------------------|
 | `screen_capture` | 截当前虚拟屏，返回 base64 PNG；静态画面无新帧时返回最后一帧 | 无 |
-| `ui_read` | 读界面元素树（JSON 数组）；需启用无障碍，未启用时返回降级提示 | 无 |
+| `ui_read` | 读界面**扁平数组**（JSON，无 children）；需启用无障碍，未启用时返回降级提示 | 无 |
+| `ui_dump` | 读界面**层级树**（JSON，含 children + resourceId）；需启用无障碍，未启用时返回降级提示 | 无 |
+| `ui_query` | 按 **XPath 子集**查询节点（返回命中节点扁平数组，含 bounds）；非法语法返回明确错误 | `xpath*` |
+| `ui_get` | 按 **resourceId** 定位节点（返回命中节点扁平数组） | `resourceId*` |
 | `screen_tap` | 虚拟屏坐标点击 | `x*`, `y*` |
 | `screen_swipe` | 虚拟屏滑动 | `x1*`,`y1*`,`x2*`,`y2*`，可选 `durMs`（默认 300） |
 | `screen_key` | 注入按键 | `code?`（KeyEvent keycode，优先）或 `name?`（`back/home/enter/del/paste/tab/esc/space/up/down/left/right/volume_up/volume_down/power/menu/search`） |

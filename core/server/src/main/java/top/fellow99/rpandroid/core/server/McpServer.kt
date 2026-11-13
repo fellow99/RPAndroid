@@ -88,7 +88,18 @@ class McpServer(
         fun prop(type: String, desc: String) = JSONObject().put("type", type).put("description", desc)
 
         tool("screen_capture", "Capture current hosted screen as base64 PNG", JSONObject(), emptyList())
-        tool("ui_read", "Read the hosted app UI element tree (JSON; requires accessibility service)", JSONObject(), emptyList())
+        tool("ui_read", "Read the hosted app UI as a flat (non-hierarchical) JSON array of nodes; requires accessibility service", JSONObject(), emptyList())
+        tool("ui_dump", "Read the hosted app UI as a hierarchical JSON tree with children and resourceId; requires accessibility service", JSONObject(), emptyList())
+        tool(
+            "ui_query", "Query UI nodes by XPath subset (e.g. //android.widget.TextView[@text='确定']); returns flat JSON array of matched nodes with bounds. Supported: axes / and //, node test * or className (short/full), predicates @text/@resourceId/@className/@packageName/@clickable/@editable/@scrollable/@index and position [N]",
+            JSONObject().put("xpath", prop("string", "XPath subset expression")),
+            listOf("xpath"),
+        )
+        tool(
+            "ui_get", "Locate UI node(s) by resourceId (viewIdResourceName); returns flat JSON array of matched nodes with bounds",
+            JSONObject().put("resourceId", prop("string", "resourceId, e.g. com.app:id/btn")),
+            listOf("resourceId"),
+        )
         tool(
             "screen_tap", "Tap at virtual-screen coordinates",
             JSONObject().put("x", prop("integer", "x")).put("y", prop("integer", "y")),
@@ -191,6 +202,21 @@ class McpServer(
             if (bytes == null) "no frame" else Base64.encodeToString(bytes, Base64.NO_WRAP)
         }
         "ui_read" -> controller.readUi() ?: "ui unavailable (enable accessibility service)"
+        "ui_dump" -> controller.dumpUi() ?: "ui unavailable (enable accessibility service)"
+        "ui_query" -> {
+            if (!args.has("xpath")) "error: missing required argument 'xpath'"
+            else try {
+                controller.queryUi(args.getString("xpath"))
+                    ?: "ui unavailable (enable accessibility service)"
+            } catch (e: IllegalArgumentException) {
+                "error: ${e.message}"
+            }
+        }
+        "ui_get" -> {
+            if (!args.has("resourceId")) "error: missing required argument 'resourceId'"
+            else controller.getUi(args.getString("resourceId"))
+                ?: "ui unavailable (enable accessibility service)"
+        }
         "screen_tap" -> {
             if (!args.has("x") || !args.has("y")) "error: missing required arguments 'x','y'"
             else "ok=${controller.tap(args.optInt("x"), args.optInt("y"))}"

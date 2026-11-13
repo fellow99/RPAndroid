@@ -143,6 +143,17 @@ class ScriptService : Service() {
             val json = control?.listAppsJson() ?: "[]"
             """{"ok":true,"apps":$json}"""
         }
+        // 界面读取（012-ui-read）：经 IScreenControl 代理回主进程 a11y。返回值即 JSON 字符串。
+        rt.host.register("ui.read") { _ -> control?.readUi() ?: "null" }
+        rt.host.register("ui.dump") { _ -> control?.dumpUi() ?: "null" }
+        rt.host.register("ui.query") { p ->
+            val o = JSONObject(p)
+            control?.queryUi(o.optString("xpath")) ?: "null"
+        }
+        rt.host.register("ui.get") { p ->
+            val o = JSONObject(p)
+            control?.getUi(o.optString("resourceId")) ?: "null"
+        }
         // 按键注入：`{code}` 优先，否则按名称查表（与 MCP screen_key 一致）。
         rt.host.register("screen.key") { p ->
             val o = JSONObject(p)

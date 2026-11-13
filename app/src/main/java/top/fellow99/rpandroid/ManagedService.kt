@@ -51,6 +51,20 @@ class ManagedService : Service() {
 
         override fun text(text: String?): Boolean = if (text == null) false else ctl()?.text(text) ?: false
 
+        override fun readUi(): String? = ctl()?.readUi()
+
+        override fun dumpUi(): String? = ctl()?.dumpUi()
+
+        override fun queryUi(xpath: String?): String? = try {
+            if (xpath == null) null else ctl()?.queryUi(xpath)
+        } catch (e: IllegalArgumentException) {
+            org.json.JSONObject().put("error", "invalid xpath: ${e.message}").toString()
+        }
+
+        override fun getUi(resourceId: String?): String? =
+            if (resourceId == null) null else ctl()?.getUi(resourceId)
+
+
         override fun info(): String {
             val c = ctl() as? top.fellow99.rpandroid.core.controller.AppScreenController
             val cfg = top.fellow99.rpandroid.core.server.ServerConfig(applicationContext)

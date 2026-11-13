@@ -185,7 +185,7 @@ class ManagedServer(
                 }
 
                 get("/ui") {
-                    val ui = withContext(Dispatchers.IO) { controller.readUi() }
+                    val ui = withContext(Dispatchers.IO) { controller.dumpUi() }
                     if (ui == null) call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to "ui unavailable (enable accessibility service)"))
                     else call.respondText(ui, ContentType.Application.Json)
                 }

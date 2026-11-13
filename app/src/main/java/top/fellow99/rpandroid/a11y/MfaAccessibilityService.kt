@@ -12,13 +12,19 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import org.json.JSONArray
 import org.json.JSONObject
+import top.fellow99.rpandroid.core.script.UiNode
+import top.fellow99.rpandroid.core.script.XPathEvaluator
 
 /**
  * [MfaAccessibilityService] —— 读被托管 App 界面的控件树（可覆盖虚拟屏窗口）。
  *
  * 用户需在系统设置里启用本服务（设置 → 无障碍）。启用后：
- *  - 遍历所有窗口（含虚拟屏），提取 text/bounds/class/clickable 等；
- *  - 供 REST `/ui` 与 MCP `ui_read` 使用。
+ *  - 把各窗口（含虚拟屏/主屏）的 a11y 树构建成纯 Kotlin [UiNode] 树；
+ *  - 提供四产出（供 REST `/ui`、MCP `ui_*`、脚本 `ui.*` 使用）：
+ *    - [dumpUi]：层级树 + resourceId
+ *    - [readUi]：扁平数组（兼容旧语义：仅保留文本/可点/可编辑节点）
+ *    - [queryUi]：XPath 子集查询（见 `013-xpath-evaluator`）
+ *    - [getUi]：按 resourceId 定位
  */
 class MfaAccessibilityService : AccessibilityService() {
 
@@ -41,41 +47,111 @@ class MfaAccessibilityService : AccessibilityService() {
         super.onDestroy()
     }
 
-    /** 收集所有窗口（含虚拟屏）的元素树，输出 JSON 字符串。 */
-    fun dumpUi(): String {
-        val out = JSONArray()
+    // ---- 四产出（依赖 a11y 服务实例；未启用返回 null，调用方转为 503/"ui unavailable"） ----
+
+    /** 层级树 JSON（root → children 递归，含 resourceId）。 */
+    fun dumpUi(): String? {
+        val roots = buildUiRoots() ?: return null
+        val arr = JSONArray()
+        roots.forEach { arr.put(nodeJson(it, withChildren = true)) }
+        return arr.toString()
+    }
+
+    /** 扁平数组 JSON（无 children；保留旧语义：text/clickable/editable 节点）。 */
+    fun readUi(): String? {
+        val roots = buildUiRoots() ?: return null
+        val arr = JSONArray()
+        roots.flatMap { it.selfAndDescendants().toList() }
+            .filter { it.text.isNotEmpty() || it.clickable || it.editable }
+            .forEach { arr.put(nodeJson(it, withChildren = false)) }
+        return arr.toString()
+    }
+
+    /**
+     * XPath 子集查询 JSON（命中节点扁平数组）。
+     * 非法 XPath 抛 [IllegalArgumentException]，由调用方转明确错误。
+     */
+    @Throws(IllegalArgumentException::class)
+    fun queryUi(xpath: String): String? {
+        val roots = buildUiRoots() ?: return null
+        val arr = JSONArray()
+        XPathEvaluator.query(roots, xpath).forEach { arr.put(nodeJson(it, withChildren = false)) }
+        return arr.toString()
+    }
+
+    /** 按 resourceId 定位（扁平数组；无匹配返回空数组）。 */
+    fun getUi(resourceId: String): String? {
+        val roots = buildUiRoots() ?: return null
+        val arr = JSONArray()
+        roots.flatMap { it.selfAndDescendants().toList() }
+            .filter { it.resourceId == resourceId }
+            .forEach { arr.put(nodeJson(it, withChildren = false)) }
+        return arr.toString()
+    }
+
+    // ---- UiNode 树构建 ----
+
+    /** 收集所有窗口（含虚拟屏/主屏）的 UiNode 根；无窗口时回退 rootInActiveWindow。 */
+    private fun buildUiRoots(): List<UiNode>? {
+        val roots = mutableListOf<UiNode>()
         val windows = runCatching { windows }.getOrNull() ?: emptyList()
         for (w in windows) {
             val root = runCatching { w.root }.getOrNull() ?: continue
             val displayId = if (Build.VERSION.SDK_INT >= 30) runCatching { w.displayId }.getOrDefault(-1) else -1
-            collect(root, out, displayId)
+            roots.add(toUiNode(root, displayId, 0))
         }
-        if (out.length() == 0) {
-            rootInActiveWindow?.let { collect(it, out, -1) }
+        if (roots.isEmpty()) {
+            rootInActiveWindow?.let { toUiNode(it, -1, 0) }?.let { roots.add(it) }
         }
-        return out.toString()
+        return roots
     }
 
-    private fun collect(node: AccessibilityNodeInfo?, out: JSONArray, displayId: Int) {
-        if (node == null) return
-        val bounds = Rect().also { node.getBoundsInScreen(it) }
-        val text = node.text?.toString() ?: node.contentDescription?.toString() ?: ""
-        if (text.isNotEmpty() || node.isClickable || node.isEditable) {
-            out.put(JSONObject().apply {
-                put("text", text)
-                put("className", node.className?.toString() ?: "")
-                put("packageName", node.packageName?.toString() ?: "")
-                put("clickable", node.isClickable)
-                put("editable", node.isEditable)
-                put("scrollable", node.isScrollable)
-                put("displayId", displayId)
-                put("bounds", JSONObject().put("l", bounds.left).put("t", bounds.top)
-                    .put("r", bounds.right).put("b", bounds.bottom))
-            })
+    private fun toUiNode(n: AccessibilityNodeInfo, displayId: Int, index: Int): UiNode {
+        val bounds = Rect().also { n.getBoundsInScreen(it) }
+        val childCount = n.childCount
+        val children = ArrayList<UiNode>(childCount.coerceAtLeast(0))
+        for (i in 0 until childCount) {
+            n.getChild(i)?.let { children.add(toUiNode(it, displayId, i)) }
         }
-        for (i in 0 until node.childCount) {
-            collect(node.getChild(i), out, displayId)
+        return UiNode(
+            text = n.text?.toString() ?: n.contentDescription?.toString() ?: "",
+            className = n.className?.toString() ?: "",
+            packageName = n.packageName?.toString() ?: "",
+            clickable = n.isClickable,
+            editable = n.isEditable,
+            scrollable = n.isScrollable,
+            resourceId = n.viewIdResourceName ?: "",
+            bounds = intArrayOf(bounds.left, bounds.top, bounds.right, bounds.bottom),
+            indexInParent = index,
+            displayId = displayId,
+            children = children,
+        )
+    }
+
+    /** 节点统一序列化（字段见 012 spec §3.2）。 */
+    private fun nodeJson(n: UiNode, withChildren: Boolean): JSONObject {
+        val b = n.bounds
+        val o = JSONObject().apply {
+            put("text", n.text)
+            put("className", n.className)
+            put("packageName", n.packageName)
+            put("clickable", n.clickable)
+            put("editable", n.editable)
+            put("scrollable", n.scrollable)
+            put("displayId", n.displayId)
+            put("resourceId", n.resourceId)
+            if (b == null || b.size < 4) {
+                put("bounds", JSONObject.NULL)
+            } else {
+                put("bounds", JSONObject().put("l", b[0]).put("t", b[1]).put("r", b[2]).put("b", b[3]))
+            }
         }
+        if (withChildren) {
+            val ca = JSONArray()
+            n.children.forEach { ca.put(nodeJson(it, withChildren = true)) }
+            o.put("children", ca)
+        }
+        return o
     }
 
     companion object {
@@ -113,14 +189,14 @@ class MfaAccessibilityService : AccessibilityService() {
             moveTo(x1.toFloat(), y1.toFloat())
             lineTo(x2.toFloat(), y2.toFloat())
         }
-        val start = if (x1 == x2 && y1 == y2) 0L else 0L
+        val start = 0L
         val duration = if (x1 == x2 && y1 == y2) 60L else durMs.toLong().coerceAtLeast(60)
         val stroke = GestureDescription.StrokeDescription(path, start, duration)
         val gesture = GestureDescription.Builder().addStroke(stroke).build()
         val latch = java.util.concurrent.CountDownLatch(1)
         var ok = false
         mainHandler.post {
-            ok = dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+            ok = dispatchGesture(gesture, object : GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) { latch.countDown() }
                 override fun onCancelled(gestureDescription: GestureDescription?) { latch.countDown() }
             }, null)

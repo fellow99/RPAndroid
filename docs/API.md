@@ -76,7 +76,7 @@ Base URL：`http://<手机IP>:8099`（局域网）或 `http://localhost:8099`（
 | POST | `/action/swipe` | 滑动，body：`{"x1":..,"y1":..,"x2":..,"y2":..,"durMs":300}` |
 | POST | `/action/key` | 按键注入，body：`{"code":4}`（MJPEG 降级模式按键） |
 | POST | `/action/text` | 文本输入，body：`{"text":"北京"}`（ASCII 走系统 input text；非 ASCII 走剪贴板+粘贴） |
-| GET | `/ui` | 界面元素树（JSON，需启用无障碍服务；不可用时 503） |
+| GET | `/ui` | 界面**层级树**（JSON，含 children + resourceId；需启用无障碍服务；不可用时 503，详见 §6） |
 | POST | `/mode` | **承载模式（010-display-mode）**：body `{"mode":"A"}`；仅允许 B→A（释放投影回虚拟屏）。A→B 需在 App UI 经系统授权弹窗（无法静默），故 A→B 返回错误。返回 `{"ok":true,"mode":"A"}` 或拒绝原因 |
 
 > 010-display-mode 说明：`mode=A`（虚拟屏承载，默认）时 `/frame`、`/action/*` 作用于私有虚拟屏；`mode=B`（主屏承载）时帧源为 MediaProjection 捕获的主屏、`/action/*` 作用于主屏（a11y 手势优先 + `input -d 0` 兜底），`/ui` 直接返回主屏被托管 App 控件树。坐标以 `GET /status` 返回的分辨率（`vScreenWidth`/`vScreenHeight` 或主屏尺寸）为准。
@@ -126,9 +126,11 @@ curl -X POST http://localhost:8099/action/tap \
 ## 6. 界面读取（GET /ui）
 
 - 需在系统「设置 → 无障碍」启用 **ManagedFloatingApp** 服务。
-- 输出元素字段：`text/className/packageName/clickable/editable/scrollable/displayId/bounds`。
-- 已知限制：部分 ROM（实测 MIUI/Android 13）的无障碍窗口列表不含自建虚拟屏，此时 `/ui` 仅能读到默认 display；
-  虚拟屏内容建议使用 `/frame` 截图配合视觉模型。
+- `GET /ui` 返回**层级树** JSON（root → `children` 递归），每个节点字段：
+  `text/className/packageName/clickable/editable/scrollable/displayId/resourceId/bounds(l,t,r,b)`，`resourceId` 取自 `viewIdResourceName`。
+- **REST 只提供树形** `/ui`；XPath 查询（`ui_query`）与按 id 定位（`ui_get`）由使用端自行解析实现，或经 MCP 工具（见 [MCP.md](./MCP.md)）。
+- 已知限制：部分 ROM（实测 MIUI/Android 13）的无障碍窗口列表不含自建虚拟屏，此时 Mode A 下 `/ui` 仅读到默认 display；
+  虚拟屏内容建议使用 `/frame` 截图配合视觉模型。Mode B（主屏承载）下 `/ui` 返回被托管主屏 App 控件树（结构化读屏首选）。
 
 ## 7. 安全提示
 

@@ -60,7 +60,7 @@ Number        := [0-9]+
 
 | 实体 | 说明 | 关键属性 |
 |---|---|---|
-| `UiNode` | 轻量树模型（纯 Kotlin） | `text/className/packageName/clickable/editable/scrollable/resourceId/bounds/indexInParent/children` |
+| `UiNode` | 轻量树模型（纯 Kotlin） | `text/className/packageName/clickable/editable/scrollable/resourceId/bounds/indexInParent/displayId/children` |
 | `XPathEvaluator` | 子集求值器 | `query(roots, xpath): List<UiNode>` |
 
 ## 5. Acceptance Scenarios

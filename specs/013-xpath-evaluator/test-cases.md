@@ -18,7 +18,7 @@ Root1
 
 ## TC-013-001：后代轴 `//` + 通配（FR-013-002/006）
 - **Steps**: `query(roots, "//*")`
-- **Expected**: 命中所有节点（6 个，含两根）
+- **Expected**: 命中所有节点（7 个，含两根）
 - **Status**: PASS
 
 ## TC-013-002：className 简写匹配（FR-013-002）
@@ -68,8 +68,10 @@ Root1
 
 ## TC-013-011：`!=` 与组合（FR-013-003，可选）
 - **Steps**: `query(roots, "//*[@className!='android.widget.TextView']")`
-- **Expected**: 命中非 TextView 节点（Button/EditText/LinearLayout）
+- **Expected**: 命中所有 className ≠ android.widget.TextView 的节点（两根 + Button/EditText/LinearLayout，共 5 个）
 - **Status**: PASS
+
+> 注：以上 TC-013-001~011 均已离线 JVM 实测通过（`gradlew :core:script:testDebugUnitTest --tests XPathEvaluatorTest`，11/11 PASS）。
 
 ---
 

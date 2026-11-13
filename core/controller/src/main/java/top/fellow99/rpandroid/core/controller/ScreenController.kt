@@ -40,6 +40,15 @@ interface ScreenController {
     /** 读取被托管 App 界面元素（JSON 数组字符串）；不可用时 null。 */
     fun readUi(): String?
 
+    /** 读取被托管 App 界面层级树（JSON，含 children + resourceId）；不可用时 null。 */
+    fun dumpUi(): String?
+
+    /** 按 XPath 子集查询界面节点（JSON 扁平命中数组）；非法 XPath 抛 [IllegalArgumentException]。 */
+    fun queryUi(xpath: String): String?
+
+    /** 按 resourceId 定位界面节点（JSON 扁平命中数组）；不可用时 null。 */
+    fun getUi(resourceId: String): String?
+
     /** 共享帧源（App 进程捕捉到的虚拟屏画面），供视频推流/预览；无会话返回 null。 */
     fun frameSource(): FrameSource?
 

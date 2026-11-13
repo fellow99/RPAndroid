@@ -15,6 +15,14 @@ interface IScreenControl {
     boolean text(String text);
     /** 屏幕/会话信息 JSON（w/h/dpi/hosted/sessionActive）。 */
     String info();
+    /** 扁平界面树 JSON；不可用时 null。 */
+    String readUi();
+    /** 层级界面树 JSON（含 children + resourceId）；不可用时 null。 */
+    String dumpUi();
+    /** XPath 子集查询（命中扁平数组 JSON；非法语法返回 {"error":...}；不可用 null）。 */
+    String queryUi(String xpath);
+    /** 按 resourceId 定位（命中扁平数组 JSON）；不可用 null。 */
+    String getUi(String resourceId);
     /** 回传日志到主进程统一日志缓冲（供 REST /logs 与 MCP logs 观察）。 */
     oneway void log(String tag, String msg);
 }

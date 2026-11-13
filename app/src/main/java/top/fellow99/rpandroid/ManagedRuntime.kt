@@ -42,7 +42,10 @@ object ManagedRuntime {
             val shell = NoRootShell(app)
             controllerRef = controller
             shellRef = shell
-            controller.uiReader = { top.fellow99.rpandroid.a11y.MfaAccessibilityService.instance?.dumpUi() }
+            controller.uiReader = { top.fellow99.rpandroid.a11y.MfaAccessibilityService.instance?.readUi() }
+            controller.uiDumper = { top.fellow99.rpandroid.a11y.MfaAccessibilityService.instance?.dumpUi() }
+            controller.uiQuerier = { x -> top.fellow99.rpandroid.a11y.MfaAccessibilityService.instance?.queryUi(x) }
+            controller.uiGetter = { id -> top.fellow99.rpandroid.a11y.MfaAccessibilityService.instance?.getUi(id) }
             // 010-display-mode：承载模式初始化与持久化（C-3：controller 不依赖 server，经回调持久化）。
             val cfg = ServerConfig(app)
             controller.displayMode = top.fellow99.rpandroid.core.controller.DisplayMode.fromWire(cfg.displayMode)
