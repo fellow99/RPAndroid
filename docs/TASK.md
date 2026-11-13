@@ -65,7 +65,7 @@
 - 参数：无；返回 JSON 数组，节点含 `children` 递归 + `resourceId`；不可用返回 `null`
 
 ### 12. ui.query —— 按 XPath 子集查询节点
-- 参数：`{ xpath }`；返回命中节点 JSON 数组（含 `bounds`）；非法 XPath 返回 `{"error":"..."}`；不可用返回 `null`
+- 参数：`{ xpath }`；返回命中节点数组（**host.invoke 已自动解析**，含 `bounds`）；非法 XPath 返回 `{"error":"..."}`；不可用返回 `null`
 
 **XPathEvaluator 支持范围**（详见 `specs/013-xpath-evaluator`）：
 - 轴：`/`（直接子级）、`//`（任意深度后代，含根自身）
@@ -76,7 +76,7 @@
 
 **正例：查询定位并触发**
 ```js
-const hit = JSON.parse(await host.invoke('ui.query', { xpath: "//android.widget.TextView[@text='确定']" }));
+const hit = await host.invoke('ui.query', { xpath: "//android.widget.TextView[@text='确定']" });
 if (Array.isArray(hit) && hit.length && hit[0].bounds) {
   const b = hit[0].bounds;
   const cx = Math.round((b.l + b.r) / 2), cy = Math.round((b.t + b.b) / 2);
@@ -86,7 +86,7 @@ if (Array.isArray(hit) && hit.length && hit[0].bounds) {
 
 ### 13. ui.get —— 按 resourceId 定位
 - 参数：`{ resourceId }`；返回命中节点 JSON 数组（可多个）；无匹配为空数组；不可用返回 `null`
-- 正例：`const r = JSON.parse(await host.invoke('ui.get', { resourceId: 'com.android.settings:id/search' }));`
+- 正例：`const r = await host.invoke('ui.get', { resourceId: 'com.android.settings:id/search' });`
 
 > 说明：`script.next` / `script.done` 为框架内部调度协议，脚本作者不要调用。
 
@@ -106,7 +106,7 @@ await host.invoke('log', { msg: 'captured ok=' + frame.ok });
 ### 示例 B：按 XPath 定位并点击（Mode B 主屏承载）
 ```js
 // 前置：已切到主屏承载、目标 App 在前台
-const hit = JSON.parse(await host.invoke('ui.query', { xpath: "//*[@text='确定']" }));
+const hit = await host.invoke('ui.query', { xpath: "//*[@text='确定']" });
 if (!Array.isArray(hit) || !hit.length) throw new Error('node not found');
 const b = hit[0].bounds;
 await host.invoke('screen.tap', { x: Math.round((b.l + b.r) / 2), y: Math.round((b.t + b.b) / 2) });

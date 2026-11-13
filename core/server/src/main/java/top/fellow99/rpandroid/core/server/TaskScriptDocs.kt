@@ -103,23 +103,23 @@ object TaskScriptDocs {
 
 ### 10. ui.read —— 读扁平界面树
 - 参数：无（传 `{}`）
-- 返回：JSON 数组字符串（节点含 `text/className/packageName/clickable/editable/scrollable/displayId/resourceId/bounds`），无 `children`；不可用返回 `null`
+- 返回：命中节点数组（`host.invoke` 已自动解析为 JS 对象集合；节点含 `text/className/packageName/clickable/editable/scrollable/displayId/resourceId/bounds`，无 `children`）；不可用返回 `null`
 
 ### 11. ui.dump —— 读层级界面树
 - 参数：无（传 `{}`）
-- 返回：JSON 数组字符串，节点含 `children` 递归 + `resourceId`；不可用返回 `null`
+- 返回：节点数组，含 `children` 递归 + `resourceId`（自动解析）；不可用返回 `null`
 
 ### 12. ui.query —— 按 XPath 子集查询节点
 - 参数：`{ xpath: string }`
-- 返回：命中节点 JSON 数组（含 `bounds`，可算中心点触发）；非法 XPath 返回 `{"error":"..."}`；不可用返回 `null`
+- 返回：命中节点数组（自动解析，含 `bounds`，可算中心点触发）；非法 XPath 返回 `{error:"..."}`；不可用返回 `null`
 - XPathEvaluator 支持范围（`specs/013-xpath-evaluator`）：
   - 轴：`/`（直接子级）、`//`（任意深度后代，含根自身）
   - 节点测试：`*`、className 简写（`TextView`）或全名（`android.widget.TextView`）
   - 谓词：`[@text='..']`、`[@resourceId='..']`、`[@className='..']`、`[@packageName='..']`、`[@clickable=true/false]`、`[@editable=..]`、`[@scrollable=..]`、`[@index=N]`、位置 `[N]`（该步匹配集第 N 个，1 基）
   - 支持 `=` / `!=`；不支持 `../`、轴全称、`|`、`@*`、函数、`[@id]` 存在性简写
-- 正例：
+- 正例（注意 `host.invoke` 已自动解析，勿再 `JSON.parse`）：
   ```js
-  const hit = JSON.parse(await host.invoke('ui.query', { xpath: "//android.widget.TextView[@text='确定']" }));
+  const hit = await host.invoke('ui.query', { xpath: "//android.widget.TextView[@text='确定']" });
   if (Array.isArray(hit) && hit.length && hit[0].bounds) {
     const b = hit[0].bounds;
     const cx = Math.round((b.l + b.r) / 2), cy = Math.round((b.t + b.b) / 2);
@@ -129,10 +129,10 @@ object TaskScriptDocs {
 
 ### 13. ui.get —— 按 resourceId 定位
 - 参数：`{ resourceId: string }`
-- 返回：命中节点 JSON 数组（可多个）；无匹配为空数组；不可用返回 `null`
+- 返回：命中节点数组（自动解析，可多个）；无匹配为空数组；不可用返回 `null`
 - 正例：
   ```js
-  const r = JSON.parse(await host.invoke('ui.get', { resourceId: 'com.android.settings:id/search' }));
+  const r = await host.invoke('ui.get', { resourceId: 'com.android.settings:id/search' });
   ```
 
 > 说明：`script.next` / `script.done` 为框架内部调度协议，脚本作者不要调用。
