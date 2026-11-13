@@ -148,7 +148,7 @@ curl -X POST http://localhost:8099/mcp \
 ## 7. 自动化任务脚本与 task_docs
 
 任务的 `script` 字段是运行在 Node 引擎中的 async JS，通过 `await host.invoke('<api>', {...})` 调用应用层接口。
-可用应用层接口（共 9 个）：
+可用应用层接口（共 13 个，另见 `docs/TASK.md` 完整文档）：
 
 | host API | 参数 | 返回 | 作用 |
 |----------|------|------|------|
@@ -161,6 +161,10 @@ curl -X POST http://localhost:8099/mcp \
 | `screen.info` | `{}` | `{ok,w,h,dpi,hosted}` | 当前虚拟屏分辨率/会话信息 |
 | `apps.list` | `{}` | `{ok, apps[]}` | 列可启动应用 |
 | `log` | 任意对象 | `{ok}` | 写日志（REST `/logs`、MCP `logs` 可查，tag=Script） |
+| `ui.read` | `{}` | JSON 扁平数组 | 读界面扁平树 |
+| `ui.dump` | `{}` | JSON 层级数组（含 children+resourceId） | 读界面层级树 |
+| `ui.query` | `{xpath}` | JSON 命中数组（含 bounds） | 按 XPath 子集查询（见 TASK.md/013） |
+| `ui.get` | `{resourceId}` | JSON 命中数组 | 按 resourceId 定位 |
 
 cron 支持 5 字段（`分 时 日 月 周`）和 6 字段（`秒 分 时 日 月 周`）；
 要求“每分钟第 00 秒”用 `0 * * * * *`。
