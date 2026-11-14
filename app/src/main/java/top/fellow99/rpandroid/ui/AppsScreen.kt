@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -148,13 +149,28 @@ fun AppsScreen(onOpenSettings: () -> Unit) {
     }
 }
 
-/** S3：可启动应用图标网格。 */
+/** S3：可启动应用图标网格（支持长按置顶，置顶排前 + 📌角标）。 */
 @Composable
 private fun AppGrid(onSelect: (AppInfo) -> Unit) {
+    val context = LocalContext.current
+    val pinStore = remember { PinnedAppsStore(context.applicationContext) }
     var apps by remember { mutableStateOf<List<AppInfo>?>(null) }
+    var pinned by remember { mutableStateOf(pinStore.getAll()) }
 
     LaunchedEffect(Unit) {
         apps = listApps(ManagedBridge.controller())
+    }
+
+    // 置顶排前（按置顶顺序），其余保持原序。sortedWith 为稳定排序。
+    val sorted = apps?.let { list ->
+        list.sortedWith(compareBy { app ->
+            pinned.indexOf(app.packageName).let { i -> if (i < 0) Int.MAX_VALUE else i }
+        })
+    }
+
+    fun refresh() {
+        apps = listApps(ManagedBridge.controller())
+        pinned = pinStore.getAll()
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -163,11 +179,11 @@ private fun AppGrid(onSelect: (AppInfo) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("选择要承载的应用", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = { apps = listApps(ManagedBridge.controller()) }) {
+            OutlinedButton(onClick = { refresh() }) {
                 Text("刷新")
             }
         }
-        val list = apps
+        val list = sorted
         if (list == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("正在加载应用列表…", style = MaterialTheme.typography.bodyMedium)
@@ -185,7 +201,22 @@ private fun AppGrid(onSelect: (AppInfo) -> Unit) {
                 modifier = Modifier.fillMaxSize(),
             ) {
                 items(list, key = { it.packageName }) { app ->
-                    AppCell(app, onClick = { onSelect(app) })
+                    val isPinned = app.packageName in pinned
+                    AppCell(
+                        app = app,
+                        pinned = isPinned,
+                        onClick = { onSelect(app) },
+                        onLongClick = {
+                            if (isPinned) {
+                                pinned = pinStore.remove(app.packageName)
+                                Toast.makeText(context, "${app.label} 已取消置顶", Toast.LENGTH_SHORT).show()
+                            } else {
+                                pinned = pinStore.add(app.packageName)
+                                Toast.makeText(context, "${app.label} 已置顶", Toast.LENGTH_SHORT).show()
+                            }
+                            refresh()
+                        },
+                    )
                 }
             }
         }
@@ -196,13 +227,26 @@ private fun listApps(controller: ScreenController?): List<AppInfo> =
     runCatching { controller?.listApps() ?: emptyList() }.getOrDefault(emptyList())
 
 @Composable
-private fun AppCell(app: AppInfo, onClick: () -> Unit) {
-    Card(onClick = onClick, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+private fun AppCell(app: AppInfo, pinned: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+    Card(
+        modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
         Column(
             Modifier.fillMaxWidth().padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            AppIconAndLabel(pkg = app.packageName, label = app.label, iconSize = 48.dp)
+            Box {
+                AppIconAndLabel(pkg = app.packageName, label = app.label, iconSize = 48.dp)
+                if (pinned) {
+                    // 置顶角标（右上角小图钉）
+                    Text(
+                        "📌",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.align(Alignment.TopEnd),
+                    )
+                }
+            }
             Text(
                 app.label,
                 style = MaterialTheme.typography.bodySmall,
