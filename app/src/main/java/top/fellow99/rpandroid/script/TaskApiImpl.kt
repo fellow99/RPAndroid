@@ -3,6 +3,7 @@ package top.fellow99.rpandroid.script
 import android.content.Context
 import top.fellow99.rpandroid.core.script.ScriptTask
 import top.fellow99.rpandroid.core.script.TaskStore
+import top.fellow99.rpandroid.core.server.MfaLog
 import top.fellow99.rpandroid.core.server.TaskApi
 import org.json.JSONArray
 import org.json.JSONObject
@@ -33,8 +34,12 @@ class TaskApiImpl(private val ctx: Context) : TaskApi {
         scheduler.rescheduleAll()
         if (isNew && t.kind == top.fellow99.rpandroid.core.script.ScheduleKind.IMMEDIATE && t.enabled) {
             // 立即任务：创建后即执行一次（走统一执行入口：互斥 + 统计 + watchdog 回写）。
+            MfaLog.i("Script", "upsert: new IMMEDIATE task id=${t.id} name=开始自动执行")
             if (TaskRuntime.begin(t.id)) {
+                MfaLog.i("Script", "upsert: auto-run begin ok id=${t.id}")
                 runCatching { scheduler.runNow(t.id) }.onFailure { TaskRuntime.end(t.id) }
+            } else {
+                MfaLog.w("Script", "upsert: auto-run rejected (busy) id=${t.id} running=${TaskRuntime.runningTaskId}")
             }
         }
         true
@@ -63,9 +68,14 @@ class TaskApiImpl(private val ctx: Context) : TaskApi {
 
     override fun run(id: String): Boolean {
         // 互斥：同一时刻仅一个自动化在执行（"同时只能一个"）；已有执行中则拒绝。
-        if (!TaskRuntime.begin(id)) return false
+        if (!TaskRuntime.begin(id)) {
+            MfaLog.w("Script", "run: rejected id=$id running=${TaskRuntime.runningTaskId}")
+            return false
+        }
+        MfaLog.i("Script", "run: begin ok id=$id")
         val t = store.get(id)
         if (t == null) {
+            MfaLog.e("Script", "run: task not found after begin id=$id")
             TaskRuntime.end(id)
             return false
         }

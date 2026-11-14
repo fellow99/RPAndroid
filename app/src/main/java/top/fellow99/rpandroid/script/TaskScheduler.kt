@@ -39,12 +39,22 @@ class TaskScheduler(private val ctx: Context) {
 
     fun runNow(taskId: String) {
         // 先落统计再启动：脚本可能瞬间结束，watchdog 回写 lastStatus 后不能被这里的旧副本覆盖。
-        val t = store.get(taskId) ?: return
+        val t = store.get(taskId)
+        if (t == null) {
+            top.fellow99.rpandroid.core.server.MfaLog.e("Script", "runNow: task not found id=$taskId (可能执行态泄漏，本 id 早已卡住)")
+            TaskRuntime.end(taskId)
+            return
+        }
         val now = System.currentTimeMillis()
         val next = nextRunAfterManualRun(t, now)
         store.upsert(t.copy(lastRunAt = now, runCount = t.runCount + 1, nextRunAt = next))
         ScriptService.clearStopFlag(ctx, taskId)
-        ScriptService.runTask(ctx, taskId)
+        val started = runCatching { ScriptService.runTask(ctx, taskId) }.onFailure {
+            top.fellow99.rpandroid.core.server.MfaLog.e("Script", "runNow: startScriptService FAILED task=$taskId err=${it.message}")
+            // 启动失败必须回收执行态，否则 UI 会永久显示「正在执行」而脚本从未运行。
+            TaskRuntime.end(taskId)
+        }
+        top.fellow99.rpandroid.core.server.MfaLog.i("Script", "runNow: task=$taskId scriptLen=${t.script.length} kind=${t.kind} startServiceOk=${started.isSuccess} next=$next")
         // next>0：保留/续排计划（SCHEDULED 的固定时间仍在未来时必须保留，否则会双跑）。
         if (next > 0) scheduleAt(store.get(taskId) ?: t, next)
     }
@@ -67,13 +77,20 @@ class TaskScheduler(private val ctx: Context) {
      * `runCount/lastRunAt` 不增长、`runningTaskId` 不可观、`lastStatus` 不回写。
      */
     fun onAlarm(taskId: String) {
-        val t = store.get(taskId) ?: return
+        val t = store.get(taskId)
+        top.fellow99.rpandroid.core.server.MfaLog.i("Script", "onAlarm fired task=$taskId exists=${t != null}")
+        if (t == null) {
+            cancel(taskId)
+            return
+        }
         if (!t.enabled) {
             cancel(taskId)
+            top.fellow99.rpandroid.core.server.MfaLog.w("Script", "onAlarm: task disabled, cancelled alarm task=$taskId")
             return
         }
         val now = System.currentTimeMillis()
         if (TaskRuntime.begin(taskId)) {
+            top.fellow99.rpandroid.core.server.MfaLog.i("Script", "onAlarm begin ok task=$taskId")
             store.upsert(t.copy(lastRunAt = now, runCount = t.runCount + 1))
             ScriptService.clearStopFlag(ctx, taskId)
             // 后台启前台服务在部分 ROM 可能抛 ForegroundServiceStartNotAllowedException；

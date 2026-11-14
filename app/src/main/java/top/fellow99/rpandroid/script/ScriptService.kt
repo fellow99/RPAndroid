@@ -68,7 +68,16 @@ class ScriptService : Service() {
             val task = store.get(taskId)
             if (task != null) {
                 queue.add(QueuedScript(task.id, task.script))
+                top.fellow99.rpandroid.core.server.MfaLog.i(
+                    "Script",
+                    "onStartCommand: queued task=${task.id} scriptLen=${task.script.length} queueSize=${queue.size}",
+                )
                 ensureNode()
+            } else {
+                top.fellow99.rpandroid.core.server.MfaLog.w(
+                    "Script",
+                    "onStartCommand: task NOT FOUND id=$taskId (脚本永不执行的潜在根因)",
+                )
             }
         } else {
             ensureNode()
@@ -102,6 +111,7 @@ class ScriptService : Service() {
             if (q == null) """{"script":null}"""
             else {
                 pendingDone[q.taskId] = CountDownLatch(1)
+                top.fellow99.rpandroid.core.server.MfaLog.i("Script", "script.next: handed to :node task=${q.taskId} scriptLen=${q.script.length}")
                 val esc = q.script.replace("\\", "\\\\").replace("\"", "\\\"")
                     .replace("\n", "\\n").replace("\r", "")
                 """{"script":"$esc","taskId":"${q.taskId}"}"""
@@ -298,6 +308,13 @@ class ScriptService : Service() {
                 fs.writeFileSync(path.join(RUN_DIR, taskId + '.json'), JSON.stringify({ ok: !!ok, error: error || null, at: Date.now() }));
               } catch (e) {}
             }
+            // 带行号/堆栈的错误描述：优先 e.stack（含 <anonymous>:行:列），否则退回 String(e)。
+            function errInfo(e) {
+              if (e == null) return 'unknown error';
+              const msg = String(e && e.message ? e.message : e);
+              const stack = e && e.stack ? String(e.stack) : '';
+              return stack ? (msg + '\n' + stack) : msg;
+            }
 
             const hosted = {};
             for (const k of Object.keys(host)) hosted[k] = host[k];
@@ -324,8 +341,9 @@ class ScriptService : Service() {
                         await host.invoke('script.done', { taskId: r.taskId, ok: true });
                         writeOutcome(r.taskId, true, null);
                       } catch (e) {
-                        await host.invoke('script.done', { taskId: r.taskId, ok: false, error: String(e) });
-                        writeOutcome(r.taskId, false, String(e));
+                        const ei = errInfo(e);
+                        await host.invoke('script.done', { taskId: r.taskId, ok: false, error: ei });
+                        writeOutcome(r.taskId, false, ei);
                       }
                     } else {
                       await host.invoke('script.done', { taskId: r.taskId, ok: false, error: 'cancelled by user' });
