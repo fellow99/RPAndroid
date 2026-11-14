@@ -126,7 +126,8 @@ for (let i = 0; i < 10; i++) {
 
 ## 注意事项
 
-- 异常应在脚本内 try/catch；未捕获异常会被框架标记为执行失败（ok=false）。
+- 异常应在脚本内 try/catch；未捕获异常会被框架标记为执行失败（ok=false）并**携带行号/堆栈**（引擎用 `e.stack` 上报）。
+- 脚本内 `catch(e)` 想自行打印行号，可用 `host.invoke('log', { msg: String((e && e.stack) || e) })`。
 - 坐标必须落在当前承载屏分辨率范围内；静态画面截屏返回最后一帧。
 - `ui.*` 在 Mode B（主屏承载）下返回被托管 App 控件树；Mode A（虚拟屏）在部分 ROM 上可能为空，可回退 `screen.frame` + 坐标。
 - 停止为尽力而为：`task_stop` 写停止信号，runner 在下一次 `host.invoke` 前检查并中止。
