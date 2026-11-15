@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "top.fellow99.rpandroid.core.controller"
+    namespace = "top.fellow99.rpauto.core.controller"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

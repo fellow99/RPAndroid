@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "top.fellow99.rpandroid.core.webrtc"
+    namespace = "top.fellow99.rpauto.core.webrtc"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {

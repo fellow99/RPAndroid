@@ -124,7 +124,7 @@ jobs:
         with:
           name: RPAuto ${{ github.ref_name }}
           body: >
-            自动构建产物 · 变体 ${{ env.VARIANT }} · 包名 top.fellow99.rpandroid ·
+            自动构建产物 · 变体 ${{ env.VARIANT }} · 包名 top.fellow99.rpauto ·
             arm64-v8a（node-runtime 26.13.0）· 校验请比对附件 SHA256SUMS ·
             构建提交 ${{ github.sha }}。
           files: |
