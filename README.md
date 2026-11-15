@@ -1,53 +1,147 @@
-# RP自动化
+# RPAuto (RP自动化)
 
-免Root自动化神器——在 Android 设备上创建自有虚拟屏，承载并控制第三方 App，通过 REST、MCP 与 MJPEG 对外提供屏幕查看、输入注入、应用承载和自动化服务。仅面向局域网或 USB，不提供公网服务。
+> **Root-free Android app hosting & automation platform** — licensed under [MIT](LICENSE).
 
-## 核心能力
+RPAuto creates a **VirtualDisplay** on your Android device (no root required), hosts a third-party
+app inside it, and exposes **screen viewing, input injection, app hosting and automation** to the
+outside world over REST, MCP and video streaming (MJPEG / WebRTC). It is designed for **local
+network or USB only** — no public / internet exposure.
 
-- 免 root 借助 shell 上下文创建 trusted VirtualDisplay
-- 在虚拟屏承载第三方 App，支持截图、点击、滑动、界面读取
-- 提供 REST API、MCP（Streamable HTTP + SSE）和 MJPEG 视频流
-- 自动化服务：独立 `:node` 前台 Service，内置 Node v26.13.0，支持立即/间隔/cron 执行 JS 任务
-- Token 鉴权（`Authorization: Bearer`、`X-Auth-Token` 或 `?token=`）
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform: Android](https://img.shields.io/badge/Platform-Android-3DDC84.svg)]()
+[![API: 24+](https://img.shields.io/badge/API-24+-blue.svg)]()
+[![arch: arm64](https://img.shields.io/badge/arch-arm64--v8a-lightgrey.svg)]()
 
-## 第三方接入文档
+## Highlights
 
-| 文档 | 内容 |
-|------|------|
-| [docs/API.md](docs/API.md) | 网络接入、鉴权、会话前置、REST 端点、任务 API、界面读取 |
-| [docs/MCP.md](docs/MCP.md) | MCP Streamable HTTP / SSE、JSON-RPC 方法、9 个工具与调用示例 |
-| [docs/MJPEG.md](docs/MJPEG.md) | 视频流端点、鉴权、浏览器/VLC/ffplay/HTML 接入、并发限制 |
+- **No root** — uses the shell context obtained via wireless-debugging pairing to create a private
+  `trusted VirtualDisplay` and inject input.
+- **Two hosting modes**
+  - **Mode A (VirtualDisplay, default)** — the hosted app runs on a private virtual screen.
+  - **Mode B (main screen)** — the hosted app is brought to the foreground via MediaProjection
+    capture, unlocking structured UI reading and stable gestures on ROMs where a virtual screen's
+    accessibility tree is unavailable (e.g. MIUI).
+- **Host & operate any app** — screenshot, tap, swipe, key injection, text input (incl. Chinese),
+  and read the UI tree (flat / hierarchical / XPath / resourceId).
+- **Multiple external interfaces** — REST API, MCP server (Streamable HTTP + SSE), MJPEG stream,
+  WebRTC console, and an in-browser playback/control client (`/client`).
+- **Automation service** — an isolated `:node` foreground service with a built-in Node engine
+  (v26, arm64). Write JS scripts and run them **immediately / on an interval / at a scheduled time /
+  via cron**.
+- **Token auth** — `Authorization: Bearer`, `X-Auth-Token` or `?token=`.
 
-## 快速开始
+## Interface & Documentation
+
+| Doc | Content |
+|-----|---------|
+| [docs/API.md](docs/API.md) | Network access, auth, session bootstrap, REST endpoints, task API, UI reading |
+| [docs/MCP.md](docs/MCP.md) | MCP Streamable HTTP / SSE, JSON-RPC methods, tool list & call examples |
+| [docs/Client.md](docs/Client.md) | In-browser playback/control client (`/client`) |
+| [docs/WebRTC.md](docs/WebRTC.md) | Low-latency WebRTC console (`/webrtc`) |
+| [docs/MJPEG.md](docs/MJPEG.md) | MJPEG stream endpoint, auth, viewers & concurrency limits |
+| [docs/TASK.md](docs/TASK.md) | Full JS script API (`host.invoke`) for automation tasks |
+
+## Quick Start
 
 ```bash
-# USB 端口转发
+# 1) Forward the port over USB (recommended for development)
 adb forward tcp:8099 tcp:8099
 
-# 健康检查（无需 token）
+# 2) Health check (no token required)
 curl http://localhost:8099/health
 
-# 建立托管会话
+# 3) Establish a hosted session (needs prior wireless-debugging pairing once)
 curl -X POST http://localhost:8099/debug/session/start \
   -H 'Content-Type: application/json' \
-  -d '{"connectPort":<adbd端口>}'
+  -d '{"connectPort":<adbd port>}'
 
-# 查看运行状态
+# 4) Check status
 curl -H "Authorization: Bearer <token>" http://localhost:8099/status
+
+# 5) Host an app and capture a frame
+curl -X POST http://localhost:8099/session/launch \
+  -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' \
+  -d '{"pkg":"com.android.settings"}'
+curl -H "Authorization: Bearer <token>" http://localhost:8099/frame -o screen.png
 ```
 
-## 工程模块
+> **First run**: enable **wireless debugging** on the device, pair it once with a pairing code
+> (设置 → 开发者选项 → 无线调试 → 使用配对码配对设备), then start a session. The cached
+> `connectPort` is restored automatically after an app restart.
+>
+> Do **not** use `adb reverse` — it makes adbd occupy the device-side port and the app fails to bind.
 
-| 模块 | 职责 |
-|------|------|
-| `app` | 配置 UI、呈现模式、自动化服务、运行时装配 |
-| `core/shell` | 免 root ADB 客户端、shell 助手、虚拟屏与输入注入 |
-| `core/controller` | 托管会话、屏幕控制、文件 IPC |
-| `core/server` | Ktor REST、MCP、MJPEG、统一日志 |
-| `core/script` | 自动化任务模型、cron 解析、Node bridge 依赖 |
+### LLM / Agent access (MCP)
 
-## 约束
+Add to your MCP client:
 
-- minSdk 24，compileSdk 36，仅 `arm64-v8a`
-- 自动化服务运行在独立 `:node` 进程；设备重启后不自动启动，需打开 App 或由闹钟/接口触发
-- 文档与示例不提交真实 token、设备 IP 等敏感信息
+```json
+{
+  "mcpServers": {
+    "RPAuto": {
+      "url": "http://192.168.x.x:8099/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+23 tools are exposed (`tools/list`), e.g. `screen_capture`, `screen_tap`, `ui_query` (XPath),
+`app_launch`, `task_create`, `task_run`, `logs`. For an authoritative list of signatures call
+`task_docs` before having a model generate scripts.
+
+### Automation script example
+
+```js
+await host.invoke('screen.launch', { pkg: 'com.android.settings' });
+await new Promise(r => setTimeout(r, 2000));
+const info = await host.invoke('screen.info', {});
+await host.invoke('screen.swipe', {
+  x1: info.w / 2, y1: info.h * 0.75,
+  x2: info.w / 2, y2: info.h * 0.25, durMs: 500
+});
+const f = await host.invoke('screen.frame', {});
+await host.invoke('log', { msg: 'captured ok=' + f.ok });
+```
+
+## Project Structure
+
+| Module | Responsibility |
+|--------|----------------|
+| `app` | Config UI, presentation modes, automation service, runtime wiring |
+| `core/shell` | Root-free ADB client, shell helper, VirtualDisplay & input injection |
+| `core/controller` | `ScreenController` — the single write entry (hosting session, screen control) |
+| `core/server` | Ktor REST, MCP, MJPEG, WebRTC, playback client, unified logging |
+| `core/script` | Automation task model, cron parsing, Node bridge |
+| `core/webrtc` | WebRTC push / signaling |
+
+All external-facing modules and presentation modes go through the single `ScreenController`,
+so user touch, REST, MCP and automation scripts operate on the **same** hosted instance.
+
+## Build
+
+```bash
+./gradlew :app:assembleDebug
+```
+
+- minSdk 24, compileSdk 36, **arm64-v8a only**.
+- Signing keystore is **not** committed; copy `keystore.properties.sample` to
+  `keystore.properties` and provide your own keys (see `docs/release-signing.md`).
+
+## Constraints & Notes
+
+- Local network (same Wi-Fi) or USB `adb forward` only — **no public internet, no TURN/relay**.
+- The automation service runs in a separate `:node` process; it does not auto-start on device boot —
+  launch the app or trigger via alarm / interface.
+- Reading the UI tree (Mode A on some ROMs, e.g. MIUI) may be unavailable — fall back to
+  `screen.frame` + coordinates, or use Mode B for structured UI reading.
+- Sensitive values (real tokens, device IPs, credentials) are never committed to this repo.
+
+## License
+
+This project is open source under the [MIT License](LICENSE). You are free to use, modify,
+distribute and even use it commercially, as long as you retain the original copyright and
+permission notice.
+
+> Use it only on devices you own or are authorized to control, and comply with your local laws.
+> The author is not responsible for any misuse of this software.
