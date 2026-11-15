@@ -278,14 +278,14 @@ object AdbPublicKey {
     }
 }
 
-/** 最小的自签名 X.509 v3 证书(无扩展):CN=RPAndroid,1970-01-01 到 2099-12-31,SHA256withRSA。 */
+/** 最小的自签名 X.509 v3 证书(无扩展):CN=RPAuto,1970-01-01 到 2099-12-31,SHA256withRSA。 */
 internal object SelfSignedCertificate {
     private val SHA256_WITH_RSA = byteArrayOf(0x2a, 0x86.toByte(), 0x48, 0x86.toByte(), 0xf7.toByte(), 0x0d, 0x01, 0x01, 0x0b)
     private val COMMON_NAME = byteArrayOf(0x55, 0x04, 0x03)
 
     fun create(keyPair: KeyPair): X509Certificate {
         val algId = seq(tlv(0x06, SHA256_WITH_RSA), tlv(0x05, ByteArray(0)))
-        val name = seq(tlv(0x31, seq(tlv(0x06, COMMON_NAME), tlv(0x0c, "RPAndroid".toByteArray()))))
+        val name = seq(tlv(0x31, seq(tlv(0x06, COMMON_NAME), tlv(0x0c, "RPAuto".toByteArray()))))
         val validity = seq(tlv(0x17, "700101000000Z".toByteArray()), tlv(0x18, "20991231235959Z".toByteArray()))
         val tbs = seq(
             tlv(0xa0, tlv(0x02, byteArrayOf(2))),

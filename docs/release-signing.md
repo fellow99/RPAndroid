@@ -14,7 +14,7 @@
 # Windows CMD / PowerShell 用 && 或分号连接
 keytool -genkeypair -v -keystore rpandroid-release.jks -alias rpandroid \
   -keyalg RSA -keysize 2048 -validity 10950 \
-  -dname "CN=RPAndroid, OU=fellow99, O=fellow99, L=Beijing, ST=Beijing, C=CN"
+  -dname "CN=RPAuto, OU=fellow99, O=fellow99, L=Beijing, ST=Beijing, C=CN"
 ```
 
 > `-validity 10950` = 30 年。**妥善保管** `rpandroid-release.jks` 与两组口令：Android 上架后**
